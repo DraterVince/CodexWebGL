@@ -157,13 +157,34 @@ session: {
           
    // Load or create player data
      try {
-         const { data: playerData, error: playerError } = await window.supabase
+         console.log('[Supabase] 🔍 Loading player data for user:', session.user.id);
+         
+         // Add timeout to prevent hanging
+         const queryPromise = window.supabase
        .from('player_data')
    .select('*')
       .eq('user_id', session.user.id)
    .single();
+   
+         const timeoutPromise = new Promise((resolve) => 
+             setTimeout(() => resolve({ data: null, error: { message: 'Query timeout' } }), 5000)
+         );
+         
+         const { data: playerData, error: playerError } = await Promise.race([queryPromise, timeoutPromise]);
        
- if (playerError && playerError.code === 'PGRST116') {
+         console.log('[Supabase] ✅ Player data query completed!');
+         console.log('[Supabase] Result:', { playerData, playerError });
+       
+if (playerError && playerError.message === 'Query timeout') {
+           console.error('[Supabase] ⏱️ Query timeout! This may be an RLS (Row Level Security) issue.');
+           console.error('[Supabase] Continuing without player data - Unity will handle it...');
+           
+           // Send auth success anyway, Unity will create player data
+           await waitForUnityInstance();
+           SendMessageToUnity('AuthManager', 'OnGoogleSignInSuccess', JSON.stringify(authResponse));
+           console.log('[Supabase] ✅ Sent auth success despite timeout');
+           return; // Exit early
+       } else if (playerError && playerError.code === 'PGRST116') {
            // Create new player data
   const username = session.user.email.split('@')[0];
        
