@@ -149,9 +149,9 @@ while (!SupabaseReadyManager.IsSupabaseReady() && attempts < 100)
     
         Debug.Log("[UIAuth] ===== DELAY COMPLETE, STARTING CHECKS =====");
     
-        // Check multiple times over 10 seconds
-      int attempts = 0;
-        int maxAttempts = 20;
+        // Check multiple times over 2.5 seconds (reduced for faster response)
+        int attempts = 0;
+        int maxAttempts = 5;
     
         while (attempts < maxAttempts)
         {
