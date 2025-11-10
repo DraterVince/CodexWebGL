@@ -13,11 +13,9 @@ public class ChapterButtonManager : MonoBehaviour
     public Button[] chapterButtons = new Button[6];
     
     [Header("Visual Settings")]
-    [Tooltip("Color for locked buttons")]
-    public Color lockedColor = new Color(0.3f, 0.3f, 0.3f, 1f);
-    
-    [Tooltip("Color for unlocked buttons")]
-    public Color unlockedColor = Color.white;
+    [Tooltip("Darkening factor for locked buttons (0-1, lower = darker)")]
+    [Range(0f, 1f)]
+    public float darkenFactor = 0.5f;
     
     [Header("Lock Overlay (Optional)")]
     [Tooltip("Optional: GameObjects to show/hide as lock icons for each button")]
@@ -28,15 +26,60 @@ public class ChapterButtonManager : MonoBehaviour
     public TextMeshProUGUI[] requiredLevelTexts = new TextMeshProUGUI[6];
     
     private int currentPlayerLevel = 0;
+    private Color[] originalButtonColors;
+    private Color[] originalTextColors;
     
     private void Start()
     {
+        // Store original colors
+        StoreOriginalColors();
         UpdateButtonStates();
     }
     
     private void OnEnable()
     {
+        // Store original colors if not already stored
+        if (originalButtonColors == null || originalButtonColors.Length == 0)
+        {
+            StoreOriginalColors();
+        }
         UpdateButtonStates();
+    }
+    
+    /// <summary>
+    /// Store the original colors of all buttons
+    /// </summary>
+    private void StoreOriginalColors()
+    {
+        originalButtonColors = new Color[chapterButtons.Length];
+        originalTextColors = new Color[chapterButtons.Length];
+        
+        for (int i = 0; i < chapterButtons.Length; i++)
+        {
+            if (chapterButtons[i] == null) continue;
+            
+            // Store button image color
+            Image buttonImage = chapterButtons[i].GetComponent<Image>();
+            if (buttonImage != null)
+            {
+                originalButtonColors[i] = buttonImage.color;
+            }
+            
+            // Store text color
+            TextMeshProUGUI tmpText = chapterButtons[i].GetComponentInChildren<TextMeshProUGUI>();
+            Text legacyText = chapterButtons[i].GetComponentInChildren<Text>();
+            
+            if (tmpText != null)
+            {
+                originalTextColors[i] = tmpText.color;
+            }
+            else if (legacyText != null)
+            {
+                originalTextColors[i] = legacyText.color;
+            }
+        }
+        
+        Debug.Log($"[ChapterButtonManager] Stored original colors for {chapterButtons.Length} buttons");
     }
     
     /// <summary>
@@ -78,11 +121,22 @@ public class ChapterButtonManager : MonoBehaviour
         // Set button interactability
         button.interactable = isUnlocked;
         
-        // Update button color
+        // Update button color - darken if locked
         Image buttonImage = button.GetComponent<Image>();
-        if (buttonImage != null)
+        if (buttonImage != null && buttonIndex < originalButtonColors.Length)
         {
-            buttonImage.color = isUnlocked ? unlockedColor : lockedColor;
+            if (isUnlocked)
+            {
+                // Restore original color
+                buttonImage.color = originalButtonColors[buttonIndex];
+            }
+            else
+            {
+                // Darken the original color
+                Color darkened = originalButtonColors[buttonIndex] * darkenFactor;
+                darkened.a = originalButtonColors[buttonIndex].a; // Keep original alpha
+                buttonImage.color = darkened;
+            }
         }
         
         // Update lock overlay visibility
@@ -104,17 +158,38 @@ public class ChapterButtonManager : MonoBehaviour
             }
         }
         
-        // Update button text if it has Text or TextMeshProUGUI component
+        // Update button text - darken if locked
         TextMeshProUGUI tmpText = button.GetComponentInChildren<TextMeshProUGUI>();
         Text legacyText = button.GetComponentInChildren<Text>();
         
-        if (tmpText != null)
+        if (buttonIndex < originalTextColors.Length)
         {
-            tmpText.color = isUnlocked ? Color.white : new Color(0.5f, 0.5f, 0.5f, 1f);
-        }
-        else if (legacyText != null)
-        {
-            legacyText.color = isUnlocked ? Color.white : new Color(0.5f, 0.5f, 0.5f, 1f);
+            if (tmpText != null)
+            {
+                if (isUnlocked)
+                {
+                    tmpText.color = originalTextColors[buttonIndex];
+                }
+                else
+                {
+                    Color darkened = originalTextColors[buttonIndex] * darkenFactor;
+                    darkened.a = originalTextColors[buttonIndex].a;
+                    tmpText.color = darkened;
+                }
+            }
+            else if (legacyText != null)
+            {
+                if (isUnlocked)
+                {
+                    legacyText.color = originalTextColors[buttonIndex];
+                }
+                else
+                {
+                    Color darkened = originalTextColors[buttonIndex] * darkenFactor;
+                    darkened.a = originalTextColors[buttonIndex].a;
+                    legacyText.color = darkened;
+                }
+            }
         }
         
         Debug.Log($"[ChapterButtonManager] Button {buttonIndex + 1} - Required Level: {requiredLevel}, Unlocked: {isUnlocked}");
