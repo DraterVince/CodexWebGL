@@ -1,0 +1,79 @@
+using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.SceneManagement;
+
+public class MainMenu : MonoBehaviour
+{
+    [Header("UI Elements")]
+    public Button logoutButton;
+    public Text userEmailText; // Optional: shows logged in user
+
+    private void Start()
+    {
+        // Setup logout button
+        if (logoutButton != null)
+        {
+            logoutButton.onClick.AddListener(OnLogoutClicked);
+        }
+        
+        EnsureUserIdSet();
+        // Display user email (optional)
+        DisplayUserInfo();
+    }
+
+    private void EnsureUserIdSet()
+    {
+        if (PlayerDataManager.Instance != null && PlayerDataManager.Instance.GetCurrentPlayerData() != null)
+        {
+            string userId = PlayerDataManager.Instance.GetCurrentPlayerData().user_id;
+            
+            if (NewAndLoadGameManager.Instance != null && !string.IsNullOrEmpty(userId))
+            {
+                NewAndLoadGameManager.Instance.SetUserId(userId);
+            }
+        }
+    }
+
+    public void LoadMainMenu()
+    {
+        SceneManager.LoadSceneAsync("MainMenu");
+    }
+
+    /// <summary>
+    /// Display logged in user information
+    /// </summary>
+    private void DisplayUserInfo()
+    {
+        string email = PlayerPrefs.GetString("email", "");
+        
+        if (!string.IsNullOrEmpty(email) && userEmailText != null)
+        {
+            userEmailText.text = "Logged in as: " + email;
+        }
+        else if (userEmailText != null)
+        {
+            userEmailText.text = "Not logged in";
+        }
+    }
+
+    /// <summary>
+    /// Handle logout button click
+    /// </summary>
+    private async void OnLogoutClicked()
+    {
+        Debug.Log("Logout button clicked from Main Menu");
+        
+        if (AuthManager.Instance != null)
+        {
+            // Perform logout (clears all data)
+            await AuthManager.Instance.Logout();
+            
+            // Go back to login screen
+            SceneManager.LoadScene("LoginScene"); // Change to your login scene name
+        }
+        else
+        {
+            Debug.LogError("AuthManager not found! Cannot logout.");
+        }
+    }
+}

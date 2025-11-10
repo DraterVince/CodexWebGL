@@ -1,0 +1,904 @@
+using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
+using Photon.Pun;
+using Photon.Realtime;
+using System.Collections.Generic;
+
+[RequireComponent(typeof(PhotonView))]
+public class LobbyManager : MonoBehaviourPunCallbacks
+{
+    [Header("UI Panels")]
+    [SerializeField] private GameObject connectionPanel;
+    [SerializeField] private GameObject lobbyPanel;
+    [SerializeField] private GameObject roomPanel;
+
+    [Header("Connection Panel")]
+    [SerializeField] private TMP_InputField nicknameInput;
+    [SerializeField] private Button connectButton;
+    [SerializeField] private TMP_Text statusText;
+
+    [Header("Lobby Panel")]
+    [SerializeField] private Button createRoomButton;
+    [SerializeField] private TMP_InputField roomNameInput;
+    [SerializeField] private Button joinRoomButton;
+    [SerializeField] private TMP_Text lobbyInfoText;
+
+    [Header("Room Panel")]
+    [SerializeField] private TMP_Text roomNameText;
+    [SerializeField] private TMP_Text playerListText;
+    [SerializeField] private Button startGameButton;
+    [SerializeField] private Button leaveRoomButton;
+    [SerializeField] private TMP_Text readyStatusText;
+    [SerializeField] private TMP_Text selectedLevelText;
+    [SerializeField] private Button readyButton; // NEW: Ready button for players
+    [SerializeField] private TMP_Text readyButtonText; // NEW: Text on ready button
+
+    [Header("Player List UI (Optional - for individual kick buttons)")]
+    [SerializeField] private Transform playerListContainer; // Container for player entries
+    [SerializeField] private GameObject playerEntryPrefab; // Prefab with player name, ready status, and kick button
+    
+    [Header("Simple Kick System (Alternative)")]
+  [SerializeField] private Button[] playerKickButtons; // Array of 5 buttons (one per player slot)
+    [SerializeField] private TMP_Text[] playerNameTexts; // Text showing player names on each button
+    
+  [Header("Kick Confirmation (Optional)")]
+ [SerializeField] private GameObject kickConfirmationPanel; // Panel asking "Kick [PlayerName]?"
+    [SerializeField] private TMP_Text kickConfirmationText; // Text showing who will be kicked
+    [SerializeField] private Button confirmKickButton; // Confirm kick
+    [SerializeField] private Button cancelKickButton; // Cancel kick
+  
+    [Header("Game Settings")]
+    [SerializeField] private int minPlayers = 2;
+    [SerializeField] private int maxPlayers = 5;
+    [SerializeField] private string[] availableLevels = { "Level_1", "Level_2", "Level_3" };
+    
+    [Header("Cosmetic Assignment")]
+    [Tooltip("Cosmetic IDs assigned based on player position (1st, 2nd, 3rd, 4th, 5th)")]
+    [SerializeField] private string[] positionBasedCosmetics = { 
+        "Knight",  // 1st player - Change to your character!
+ "Ronin",   // 2nd player - Change to your character!
+     "Daimyo",   // 3rd player - Change to your character!
+        "King",    // 4th player - Change to your character!
+        "DemonGirl"    // 5th player - Change to your character!
+    };
+
+    private string selectedLevel = "";
+    private bool isLocalPlayerReady = false;
+    private Player playerPendingKick = null; // Track who is pending kick
+    
+    // NEW: Step 2 - List to track dynamic player entries
+    private List<PlayerListEntry> playerEntries = new List<PlayerListEntry>();
+
+    // Player custom property keys
+    private const string READY_STATE_KEY = "IsReady";
+    private const string COSMETIC_KEY = "multiplayer_cosmetic";
+    private const string POSITION_KEY = "player_position";
+
+    private void Start()
+    {
+        ShowConnectionPanel();
+SetupButtons();
+      
+   if (PlayerPrefs.HasKey("PlayerNickname"))
+  {
+          if (nicknameInput != null)
+             nicknameInput.text = PlayerPrefs.GetString("PlayerNickname");
+        }
+    }
+
+    private void Update()
+    {
+     if (statusText != null && NetworkManager.Instance != null)
+        {
+  statusText.text = NetworkManager.Instance.GetConnectionStatus();
+        }
+
+   if (PhotonNetwork.InRoom)
+    {
+         UpdateRoomUI();
+        }
+    
+    if (lobbyInfoText != null && PhotonNetwork.InLobby)
+        {
+        lobbyInfoText.text = $"In Lobby - {PhotonNetwork.CountOfPlayers} players online";
+     }
+    }
+
+    #region UI Panel Management
+
+    private void ShowConnectionPanel()
+    {
+        if (connectionPanel != null) connectionPanel.SetActive(true);
+        if (lobbyPanel != null) lobbyPanel.SetActive(false);
+        if (roomPanel != null) roomPanel.SetActive(false);
+    }
+
+    private void ShowLobbyPanel()
+    {
+        if (connectionPanel != null) connectionPanel.SetActive(false);
+ if (lobbyPanel != null) lobbyPanel.SetActive(true);
+        if (roomPanel != null) roomPanel.SetActive(false);
+    }
+
+    private void ShowRoomPanel()
+    {
+        if (connectionPanel != null) connectionPanel.SetActive(false);
+        if (lobbyPanel != null) lobbyPanel.SetActive(false);
+     if (roomPanel != null) roomPanel.SetActive(true);
+    }
+
+  #endregion
+
+    #region Button Setup
+
+    private void SetupButtons()
+    {
+        if (connectButton != null)
+            connectButton.onClick.AddListener(OnConnectButtonClicked);
+
+        if (createRoomButton != null)
+  createRoomButton.onClick.AddListener(OnCreateRoomButtonClicked);
+
+        if (joinRoomButton != null)
+  joinRoomButton.onClick.AddListener(OnJoinRoomButtonClicked);
+
+        if (startGameButton != null)
+            startGameButton.onClick.AddListener(OnStartGameButtonClicked);
+
+      if (leaveRoomButton != null)
+            leaveRoomButton.onClick.AddListener(OnLeaveRoomButtonClicked);
+        
+    // NEW: Ready button
+     if (readyButton != null)
+         readyButton.onClick.AddListener(OnReadyButtonClicked);
+        
+     // NEW: Kick confirmation buttons
+        if (confirmKickButton != null)
+        confirmKickButton.onClick.AddListener(OnConfirmKickClicked);
+  
+        if (cancelKickButton != null)
+    cancelKickButton.onClick.AddListener(OnCancelKickClicked);
+        
+        // NEW: Setup kick buttons for each player slot
+        if (playerKickButtons != null)
+        {
+            for (int i = 0; i < playerKickButtons.Length; i++)
+{
+            int index = i; // Capture for lambda
+    if (playerKickButtons[i] != null)
+    {
+   playerKickButtons[i].onClick.AddListener(() => OnKickButtonClicked(index));
+        }
+        }
+        }
+        
+        // Hide kick confirmation panel initially
+    if (kickConfirmationPanel != null)
+    kickConfirmationPanel.SetActive(false);
+    }
+
+    #endregion
+
+    #region Button Callbacks
+
+    private void OnConnectButtonClicked()
+    {
+        string nickname = nicknameInput != null ? nicknameInput.text : "Player";
+
+   if (string.IsNullOrEmpty(nickname))
+    {
+            nickname = "Player_" + Random.Range(1000, 9999);
+  }
+
+  PlayerPrefs.SetString("PlayerNickname", nickname);
+        PlayerPrefs.Save();
+
+        if (NetworkManager.Instance != null)
+    {
+  NetworkManager.Instance.SetPlayerNickname(nickname);
+            NetworkManager.Instance.ConnectToPhoton();
+        }
+
+        ShowLobbyPanel();
+    }
+
+    private void OnCreateRoomButtonClicked()
+    {
+string roomName = roomNameInput != null && !string.IsNullOrEmpty(roomNameInput.text) 
+            ? roomNameInput.text 
+            : "Room_" + Random.Range(1000, 9999);
+ 
+     RoomOptions roomOptions = new RoomOptions
+        {
+         MaxPlayers = (byte)maxPlayers,
+ IsVisible = true,
+            IsOpen = true
+        };
+
+        PhotonNetwork.CreateRoom(roomName, roomOptions);
+        Debug.Log($"Creating room: {roomName} (Max: {maxPlayers} players)");
+    }
+
+    private void OnJoinRoomButtonClicked()
+    {
+        string roomName = roomNameInput != null ? roomNameInput.text : "";
+      
+        if (!string.IsNullOrEmpty(roomName))
+        {
+            if (NetworkManager.Instance != null)
+   {
+         NetworkManager.Instance.JoinRoom(roomName);
+      }
+        }
+        else
+        {
+            Debug.LogWarning("Please enter a room name!");
+        }
+    }
+
+    // NEW: Ready button callback
+    private void OnReadyButtonClicked()
+    {
+        if (!PhotonNetwork.InRoom) return;
+
+      // Toggle ready state
+    isLocalPlayerReady = !isLocalPlayerReady;
+
+ // Update player properties
+        ExitGames.Client.Photon.Hashtable props = new ExitGames.Client.Photon.Hashtable
+        {
+   { READY_STATE_KEY, isLocalPlayerReady }
+        };
+      PhotonNetwork.LocalPlayer.SetCustomProperties(props);
+
+      Debug.Log($"[LobbyManager] Player ready state: {isLocalPlayerReady}");
+   
+        // Update button text
+  UpdateReadyButton();
+    }
+
+    private void OnStartGameButtonClicked()
+    {
+      if (!PhotonNetwork.IsMasterClient)
+     {
+            Debug.LogWarning("Only the host can start the game!");
+ if (readyStatusText != null)
+        readyStatusText.text = "Only host can start!";
+  return;
+        }
+
+     if (PhotonNetwork.CurrentRoom.PlayerCount < minPlayers)
+        {
+        Debug.LogWarning($"Need at least {minPlayers} players to start!");
+       if (readyStatusText != null)
+         readyStatusText.text = $"Need {minPlayers} players minimum!";
+            return;
+        }
+
+        // NEW: Check if all players are ready
+        if (!AreAllPlayersReady())
+     {
+            Debug.LogWarning("All players must be ready before starting!");
+   if (readyStatusText != null)
+       readyStatusText.text = "All players must be ready!";
+         return;
+        }
+
+        selectedLevel = availableLevels[Random.Range(0, availableLevels.Length)];
+        Debug.Log($"Starting game on level: {selectedLevel}");
+
+        PhotonNetwork.CurrentRoom.IsOpen = false;
+        PhotonNetwork.CurrentRoom.IsVisible = false;
+        
+    PhotonNetwork.LoadLevel(selectedLevel);
+    }
+
+    private void OnLeaveRoomButtonClicked()
+    {
+        if (NetworkManager.Instance != null)
+      {
+NetworkManager.Instance.LeaveRoom();
+      }
+  
+   // Reset ready state
+   isLocalPlayerReady = false;
+      
+// Clear dynamic player list
+        ClearDynamicPlayerList();
+    
+     ShowLobbyPanel();
+    }
+
+    #endregion
+
+    #region Ready System
+
+    /// <summary>
+    /// Check if all players in the room are ready
+    /// </summary>
+    private bool AreAllPlayersReady()
+    {
+        foreach (Player player in PhotonNetwork.PlayerList)
+        {
+            // Host (Master Client) is always considered ready
+ if (player.IsMasterClient)
+ continue;
+
+         // Check if player has ready property and it's true
+            if (!player.CustomProperties.ContainsKey(READY_STATE_KEY))
+          return false;
+
+         bool playerReady = (bool)player.CustomProperties[READY_STATE_KEY];
+         if (!playerReady)
+      return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Get the number of ready players
+    /// </summary>
+    private int GetReadyPlayerCount()
+    {
+        int readyCount = 0;
+
+        foreach (Player player in PhotonNetwork.PlayerList)
+        {
+    // Host is always considered ready
+      if (player.IsMasterClient)
+        {
+     readyCount++;
+           continue;
+      }
+
+  if (player.CustomProperties.ContainsKey(READY_STATE_KEY))
+     {
+        bool playerReady = (bool)player.CustomProperties[READY_STATE_KEY];
+         if (playerReady)
+     readyCount++;
+  }
+    }
+
+        return readyCount;
+    }
+
+  /// <summary>
+    /// Check if a specific player is ready
+    /// </summary>
+    private bool IsPlayerReady(Player player)
+    {
+// Host is always ready
+        if (player.IsMasterClient)
+         return true;
+
+    if (player.CustomProperties.ContainsKey(READY_STATE_KEY))
+        {
+       return (bool)player.CustomProperties[READY_STATE_KEY];
+        }
+
+     return false;
+    }
+
+    /// <summary>
+    /// Update the ready button appearance
+    /// </summary>
+    private void UpdateReadyButton()
+    {
+        if (readyButton == null) return;
+
+        // Hide ready button for host
+ if (PhotonNetwork.IsMasterClient)
+    {
+            readyButton.gameObject.SetActive(false);
+      return;
+     }
+
+ readyButton.gameObject.SetActive(true);
+
+        if (readyButtonText != null)
+  {
+            readyButtonText.text = isLocalPlayerReady ? "UNREADY" : "READY";
+        }
+
+      // Change button color based on ready state
+        ColorBlock colors = readyButton.colors;
+        colors.normalColor = isLocalPlayerReady ? new Color(1f, 0.5f, 0.5f) : new Color(0.5f, 1f, 0.5f);
+        readyButton.colors = colors;
+    }
+
+    #endregion
+
+    #region Kick System
+
+    /// <summary>
+    /// Kick a player from the room (Host only)
+    /// </summary>
+    public void KickPlayer(Player playerToKick)
+    {
+        if (!PhotonNetwork.IsMasterClient)
+     {
+       Debug.LogWarning("Only the host can kick players!");
+        return;
+        }
+
+        if (playerToKick == null || playerToKick.IsLocal)
+        {
+   Debug.LogWarning("Cannot kick yourself!");
+    return;
+        }
+
+        Debug.Log($"[LobbyManager] Host kicking player: {playerToKick.NickName}");
+
+        // Close the room for the kicked player using RPC
+        PhotonView photonView = GetComponent<PhotonView>();
+        if (photonView != null)
+        {
+            photonView.RPC("RPC_KickPlayer", playerToKick);
+        }
+      else
+        {
+ Debug.LogError("PhotonView component missing! Add PhotonView to LobbyManager.");
+        }
+}
+
+    /// <summary>
+    /// RPC called on the player being kicked
+    /// </summary>
+    [PunRPC]
+    private void RPC_KickPlayer()
+    {
+      Debug.Log("[LobbyManager] You have been kicked from the room!");
+  
+        if (readyStatusText != null)
+      {
+        readyStatusText.text = "You have been kicked by the host!";
+  readyStatusText.color = Color.red;
+        }
+
+    // Leave the room
+        PhotonNetwork.LeaveRoom();
+    }
+
+    #endregion
+
+    #region Dynamic Player List
+
+    /// <summary>
+    /// Step 3: Update the dynamic player list (spawn/despawn entries)
+    /// </summary>
+    private void UpdateDynamicPlayerList()
+    {
+        if (playerListContainer == null || playerEntryPrefab == null)
+        {
+            // Dynamic player list not set up - skip
+            return;
+        }
+
+        if (!PhotonNetwork.InRoom) return;
+
+        // Get sorted players
+        Player[] sortedPlayers = PhotonNetwork.PlayerList;
+        System.Array.Sort(sortedPlayers, (a, b) => a.ActorNumber.CompareTo(b.ActorNumber));
+
+        bool isHost = PhotonNetwork.IsMasterClient;
+
+        // Remove entries for players who left
+        for (int i = playerEntries.Count - 1; i >= 0; i--)
+        {
+            if (playerEntries[i] == null)
+            {
+                playerEntries.RemoveAt(i);
+                continue;
+            }
+
+            Player entryPlayer = playerEntries[i].GetPlayer();
+            if (entryPlayer == null || !System.Array.Exists(sortedPlayers, p => p.ActorNumber == entryPlayer.ActorNumber))
+            {
+                // Player left - destroy entry
+                Destroy(playerEntries[i].gameObject);
+                playerEntries.RemoveAt(i);
+                Debug.Log($"[LobbyManager] Removed player entry for departed player");
+            }
+        }
+
+        // Add/update entries for current players
+        for (int i = 0; i < sortedPlayers.Length; i++)
+        {
+            Player player = sortedPlayers[i];
+
+            // Check if entry already exists
+            PlayerListEntry existingEntry = playerEntries.Find(e =>
+                   e != null && e.GetPlayer() != null && e.GetPlayer().ActorNumber == player.ActorNumber);
+
+            if (existingEntry != null)
+            {
+                // Update existing entry
+                bool playerIsHost = player.IsMasterClient;
+                bool canKick = isHost && !player.IsLocal && !player.IsMasterClient;
+                existingEntry.UpdateDisplay(playerIsHost, canKick);
+            }
+            else
+            {
+                // Create new entry
+                GameObject entryObj = Instantiate(playerEntryPrefab, playerListContainer);
+
+                // IMPORTANT: Get OUR custom PlayerListEntry (not the Photon demo one!)
+                // The Photon demo one is in namespace Photon.Pun.Demo.Asteroids
+                // Ours is in the global namespace
+                PlayerListEntry entry = entryObj.GetComponent<PlayerListEntry>();
+
+                // Double-check it's not the Photon demo version
+                if (entry != null && entry.GetType().Namespace == "Photon.Pun.Demo.Asteroids")
+                {
+                    Debug.LogError("[LobbyManager] Prefab is using Photon Demo PlayerListEntry! Remove it and add the custom PlayerListEntry script instead.");
+                    entry = null;
+                }
+
+                if (entry != null)
+                {
+                    bool playerIsHost = player.IsMasterClient;
+                    bool canKick = isHost && !player.IsLocal && !player.IsMasterClient;
+
+                    entry.Initialize(player, playerIsHost, canKick, OnKickButtonClicked);
+                    playerEntries.Add(entry);
+
+                    Debug.Log($"[LobbyManager] Added player entry for: {player.NickName}");
+                }
+                else
+                {
+                    Debug.LogError("[LobbyManager] PlayerListEntry component missing on prefab! Make sure the prefab has YOUR custom PlayerListEntry script (not the Photon demo one).");
+                    Destroy(entryObj);
+                }
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Clear all player entries
+    /// </summary>
+    private void ClearDynamicPlayerList()
+    {
+    foreach (var entry in playerEntries)
+        {
+     if (entry != null)
+     {
+           Destroy(entry.gameObject);
+         }
+        }
+        
+        playerEntries.Clear();
+    }
+    
+    #endregion
+
+    #region Room UI Updates
+
+    private void UpdateRoomUI()
+    {
+        if (!PhotonNetwork.InRoom) return;
+
+        ShowRoomPanel();
+
+        if (roomNameText != null)
+    {
+     roomNameText.text = $"Room: {PhotonNetwork.CurrentRoom.Name}";
+ }
+
+    // Update player list with ready status and kick buttons
+ if (playerListText != null)
+        {
+ string playerList = $"Players ({PhotonNetwork.CurrentRoom.PlayerCount}/{maxPlayers}):\n\n";
+ 
+// Sort players by actor number to maintain consistent order
+        Player[] sortedPlayers = PhotonNetwork.PlayerList;
+     System.Array.Sort(sortedPlayers, (a, b) => a.ActorNumber.CompareTo(b.ActorNumber));
+     
+        for (int i = 0; i < sortedPlayers.Length; i++)
+      {
+     Player player = sortedPlayers[i];
+ 
+            // Get assigned cosmetic for this position
+ string assignedCosmetic = GetCosmeticForPosition(i);
+     
+         playerList += $"• {player.NickName}";
+ 
+       if (player.IsMasterClient)
+         playerList += " [HOST]";
+         
+  // Show assigned character
+      playerList += $" - {GetCosmeticDisplayName(assignedCosmetic)}";
+       
+        // NEW: Show ready status
+       bool playerReady = IsPlayerReady(player);
+  playerList += playerReady ? " ? READY" : " ? Not Ready";
+       
+ playerList += "\n";
+    }
+  
+  playerListText.text = playerList;
+  }
+    
+ // NEW: Update dynamic player list (if set up)
+        UpdateDynamicPlayerList();
+        
+      // Update kick button array (if using static buttons instead)
+        UpdateKickButtons();
+
+        // Update start button - only enabled if host and all players ready
+   if (startGameButton != null)
+        {
+ bool canStart = PhotonNetwork.IsMasterClient 
+   && PhotonNetwork.CurrentRoom.PlayerCount >= minPlayers
+  && AreAllPlayersReady();
+    startGameButton.interactable = canStart;
+     }
+
+  // Update ready button
+    UpdateReadyButton();
+
+ // Update ready status text
+        if (readyStatusText != null)
+   {
+int currentPlayers = PhotonNetwork.CurrentRoom.PlayerCount;
+   int readyPlayers = GetReadyPlayerCount();
+
+if (currentPlayers < minPlayers)
+         {
+     readyStatusText.text = $"Waiting for players... ({currentPlayers}/{minPlayers} minimum)";
+        readyStatusText.color = Color.yellow;
+   }
+ else if (readyPlayers < currentPlayers)
+  {
+    readyStatusText.text = $"Players ready: {readyPlayers}/{currentPlayers}";
+     readyStatusText.color = Color.yellow;
+       }
+      else
+  {
+   readyStatusText.text = $"All players ready! ({currentPlayers}/{maxPlayers})";
+  readyStatusText.color = Color.green;
+ }
+  }
+
+        if (selectedLevelText != null)
+        {
+        selectedLevelText.text = "Random level will be selected";
+        }
+ }
+
+    #endregion
+    
+ #region Photon Callbacks
+    
+    /// <summary>
+    /// Called when a player joins the room
+    /// </summary>
+    public override void OnPlayerEnteredRoom(Player newPlayer)
+    {
+        Debug.Log($"[LobbyManager] Player joined: {newPlayer.NickName}");
+      
+   // Update UI
+   if (PhotonNetwork.InRoom)
+     {
+    UpdateRoomUI();
+        }
+    }
+    
+    /// <summary>
+    /// Called when a player leaves the room
+    /// </summary>
+    public override void OnPlayerLeftRoom(Player otherPlayer)
+    {
+        Debug.Log($"[LobbyManager] Player left: {otherPlayer.NickName}");
+   
+  // Update UI
+   if (PhotonNetwork.InRoom)
+   {
+            UpdateRoomUI();
+        }
+    }
+    
+    /// <summary>
+    /// Called when player properties are updated (e.g., ready status)
+    /// </summary>
+    public override void OnPlayerPropertiesUpdate(Player targetPlayer, ExitGames.Client.Photon.Hashtable changedProps)
+    {
+  // Check if ready status changed
+        if (changedProps.ContainsKey("IsReady"))
+        {
+            Debug.Log($"[LobbyManager] {targetPlayer.NickName} ready status changed");
+            
+    // Update UI
+            if (PhotonNetwork.InRoom)
+  {
+              UpdateRoomUI();
+  }
+        }
+    }
+    
+    /// <summary>
+    /// Called when master client changes (host leaves)
+    /// </summary>
+    public override void OnMasterClientSwitched(Player newMasterClient)
+    {
+        Debug.Log($"[LobbyManager] New host: {newMasterClient.NickName}");
+    
+        // Update UI (kick buttons visibility changes)
+        if (PhotonNetwork.InRoom)
+        {
+        UpdateRoomUI();
+        }
+    }
+    
+    #endregion
+
+    #region Kick Button Callbacks
+    
+    /// <summary>
+    /// Called when kick button is clicked from the button array
+    /// </summary>
+    private void OnKickButtonClicked(int playerIndex)
+    {
+        if (!PhotonNetwork.IsMasterClient || !PhotonNetwork.InRoom) return;
+        
+        if (playerIndex < 0 || playerIndex >= PhotonNetwork.PlayerList.Length) return;
+ 
+        Player targetPlayer = PhotonNetwork.PlayerList[playerIndex];
+        
+        // Don't allow kicking yourself
+     if (targetPlayer.IsLocal) return;
+  
+        // Show confirmation panel
+   if (kickConfirmationPanel != null)
+     {
+        playerPendingKick = targetPlayer;
+            
+            if (kickConfirmationText != null)
+   {
+    kickConfirmationText.text = $"Kick {targetPlayer.NickName}?";
+  }
+       
+          kickConfirmationPanel.SetActive(true);
+        }
+        else
+        {
+    // No confirmation panel - kick immediately
+            KickPlayer(targetPlayer);
+        }
+    }
+    
+ /// <summary>
+    /// Called when dynamic player entry kick button is clicked
+    /// </summary>
+    private void OnKickButtonClicked(Player playerToKick)
+    {
+        if (!PhotonNetwork.IsMasterClient || !PhotonNetwork.InRoom) return;
+  
+        if (playerToKick == null || playerToKick.IsLocal) return;
+   
+   // Show confirmation panel
+        if (kickConfirmationPanel != null)
+      {
+        playerPendingKick = playerToKick;
+            
+            if (kickConfirmationText != null)
+      {
+      kickConfirmationText.text = $"Kick {playerToKick.NickName}?";
+            }
+      
+            kickConfirmationPanel.SetActive(true);
+}
+        else
+   {
+            // No confirmation panel - kick immediately
+         KickPlayer(playerToKick);
+      }
+  }
+    
+    /// <summary>
+    /// Confirm kick button clicked
+    /// </summary>
+    private void OnConfirmKickClicked()
+    {
+        if (playerPendingKick != null)
+        {
+    KickPlayer(playerPendingKick);
+    playerPendingKick = null;
+     }
+        
+      if (kickConfirmationPanel != null)
+        {
+          kickConfirmationPanel.SetActive(false);
+        }
+    }
+    
+    /// <summary>
+    /// Cancel kick button clicked
+    /// </summary>
+    private void OnCancelKickClicked()
+    {
+playerPendingKick = null;
+        
+        if (kickConfirmationPanel != null)
+        {
+       kickConfirmationPanel.SetActive(false);
+        }
+    }
+  
+    /// <summary>
+    /// Update the kick button array (static buttons)
+    /// </summary>
+    private void UpdateKickButtons()
+    {
+        if (playerKickButtons == null || playerKickButtons.Length == 0) return;
+      
+        bool isHost = PhotonNetwork.IsMasterClient;
+    Player[] sortedPlayers = PhotonNetwork.PlayerList;
+        System.Array.Sort(sortedPlayers, (a, b) => a.ActorNumber.CompareTo(b.ActorNumber));
+        
+        for (int i = 0; i < playerKickButtons.Length; i++)
+        {
+            if (playerKickButtons[i] == null) continue;
+          
+ if (i < sortedPlayers.Length)
+     {
+                Player player = sortedPlayers[i];
+      
+            // Show button
+       playerKickButtons[i].gameObject.SetActive(true);
+      
+  // Update name text
+         if (playerNameTexts != null && i < playerNameTexts.Length && playerNameTexts[i] != null)
+    {
+          playerNameTexts[i].text = player.NickName;
+                }
+            
+             // Enable/disable button
+        bool canKick = isHost && !player.IsLocal && !player.IsMasterClient;
+      playerKickButtons[i].interactable = canKick;
+ }
+            else
+          {
+      // Hide unused buttons
+ playerKickButtons[i].gameObject.SetActive(false);
+            }
+   }
+ }
+    
+    #endregion
+    
+    #region Cosmetic Helpers
+    
+    /// <summary>
+    /// Get the cosmetic ID for a specific player position
+    /// </summary>
+    private string GetCosmeticForPosition(int position)
+    {
+        if (positionBasedCosmetics == null || position < 0 || position >= positionBasedCosmetics.Length)
+ {
+     return "default";
+        }
+        
+  return positionBasedCosmetics[position];
+    }
+    
+    /// <summary>
+    /// Get a display-friendly name for a cosmetic ID
+    /// </summary>
+    private string GetCosmeticDisplayName(string cosmeticId)
+{
+        if (string.IsNullOrEmpty(cosmeticId) || cosmeticId == "default")
+  {
+      return "Default";
+        }
+        
+        // Add spaces before capital letters for better readability
+        // Example: "DemonGirl" -> "Demon Girl"
+        string displayName = System.Text.RegularExpressions.Regex.Replace(cosmeticId, "(\\B[A-Z])", " $1");
+
+        return displayName;
+    }
+    
+    #endregion
+}

@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en-us">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>Unity WebGL Player | {{{ PRODUCT_NAME }}}</title>
+    <link rel="shortcut icon" href="TemplateData/favicon.ico">
+    <link rel="stylesheet" href="TemplateData/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
+</head>
+<body>
+    <div id="unity-container" class="unity-desktop">
+        <canvas id="unity-canvas" width={{{ WIDTH }}} height={{{ HEIGHT }}}></canvas>
+        <div id="unity-loading-bar">
+ <div id="unity-logo"></div>
+    <div id="unity-progress-bar-empty">
+      <div id="unity-progress-bar-full"></div>
+            </div>
+    </div>
+     <div id="unity-warning"> </div>
+     <div id="unity-footer">
+            <div id="unity-webgl-logo"></div>
+ <div id="unity-fullscreen-button"></div>
+      <div id="unity-build-title">{{{ PRODUCT_NAME }}}</div>
+        </div>
+    </div>
+  
+    <script>
+        var supabaseClient = null;
+        var unityInstance = null;
+        var supabaseReady = false;
+  
+        const SUPABASE_URL = 'https://bpjyqsfggliwehnqcbhy.supabase.co';
+   const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJwanlxc2ZnZ2xpd2VobnFjYmh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ3OTQ4MjksImV4cCI6MjA3MDM3MDgyOX0.0Kfae4pN-paqxcRAycmQIhuAHrGZe2gs6xTKoAy7-5c';
+ 
+    window.supabase = null;
+        
+  function initSupabase() {
+            if (supabaseReady && supabaseClient !== null) {
+           return true;
+}
+    
+            if (typeof supabase === 'undefined') {
+              return false;
+   }
+   
+      if (supabaseClient === null) {
+ try {
+   supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+          window.supabase = supabaseClient;
+    supabaseReady = true;
+      
+    // Setup Auth State Change Listener for OAuth redirects
+         setupAuthListener();
+            
+ return true;
+        } catch (error) {
+          return false;
+   }
+            }
+       return true;
+      }
+        
+    // Google Sign-In Function
+window.SupabaseGoogleSignIn = async function() {
+            try {
+             console.log('[Supabase] Starting Google Sign-In...');
+       
+const { data, error } = await window.supabase.auth.signInWithOAuth({
+       provider: 'google',
+  options: {
+      redirectTo: window.location.origin
+          }
+  });
+     
+        if (error) {
+      console.error('[Supabase] Google Sign-In error:', error);
+                    SendMessageToUnity('AuthManager', 'OnGoogleSignInError', error.message);
+       } else {
+          console.log('[Supabase] Google Sign-In initiated - redirecting...');
+                }
+    } catch (error) {
+                console.error('[Supabase] Google Sign-In exception:', error);
+    SendMessageToUnity('AuthManager', 'OnGoogleSignInError', error.message);
+            }
+     };
+        
+    // Auth State Change Listener (handles OAuth redirects)
+        function setupAuthListener() {
+ window.supabase.auth.onAuthStateChange(async (event, session) => {
+                console.log('[Supabase] Auth state changed:', event);
+   
+                if (event === 'SIGNED_IN' && session) {
+             const authResponse = {
+            user: {
+         id: session.user.id,
+         email: session.user.email
+      },
+      session: {
+     access_token: session.access_token,
+              refresh_token: session.refresh_token
+ }
+        };
+         
+         // Check if this is a Google Sign-In
+                    if (session.user.app_metadata.provider === 'google') {
+         console.log('[Supabase] Google Sign-In successful!');
+              
+   // Load or create player data
+            try {
+         const { data: playerData, error: playerError } = await window.supabase
+       .from('player_data')
+   .select('*')
+      .eq('user_id', session.user.id)
+   .single();
+         
+       if (playerError && playerError.code === 'PGRST116') {
+           // Create new player data
+  const username = session.user.email.split('@')[0];
+         
+           const { data: newPlayerData, error: createError } = await window.supabase
+     .from('player_data')
+           .insert({
+        user_id: session.user.id,
+ email: session.user.email,
+      username: username,
+         levels_unlocked: 5,
+   current_money: 0,
+                unlocked_cosmetics: '[]'
+     })
+  .select()
+                .single();
+      
+ if (!createError && newPlayerData) {
+       SendMessageToUnity('PlayerDataManager', 'OnPlayerDataCreated', JSON.stringify(newPlayerData));
+           }
+       } else if (!playerError && playerData) {
+            SendMessageToUnity('PlayerDataManager', 'OnPlayerDataLoaded', JSON.stringify(playerData));
+           }
+                 } catch (playerLoadError) {
+           console.error('[Supabase] Error loading player data:', playerLoadError);
+         }
+          
+           SendMessageToUnity('AuthManager', 'OnGoogleSignInSuccess', JSON.stringify(authResponse));
+           } else {
+      // Regular email/password login
+  SendMessageToUnity('AuthManager', 'OnLoginSuccess', JSON.stringify(authResponse));
+        }
+        }
+            });
+    }
+        
+  // Initialize Supabase and notify Unity when ready
+        let initAttempts = 0;
+        const maxInitAttempts = 50;
+    
+        function waitForSupabase() {
+            if (initSupabase()) {
+         notifyUnityWhenReady();
+      return;
+  }
+       
+            initAttempts++;
+    
+       if (initAttempts < maxInitAttempts) {
+          setTimeout(waitForSupabase, 100);
+      }
+        }
+        
+      function notifyUnityWhenReady() {
+     if (unityInstance) {
+     SendMessageToUnity('SupabaseReadyManager', 'OnSupabaseReady', '');
+          } else {
+           setTimeout(notifyUnityWhenReady, 100);
+ }
+        }
+        
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', waitForSupabase);
+    } else {
+   waitForSupabase();
+  }
+        
+        // Helper function to send messages to Unity
+   function SendMessageToUnity(objectName, methodName, message) {
+          if (unityInstance) {
+    unityInstance.SendMessage(objectName, methodName, message || '');
+         } else {
+  console.warn('Unity instance not ready yet');
+            }
+ }
+        
+        // =====================
+   // LocalStorage Helpers for Unity
+        // =====================
+        window.SetLocalStorage = function(key, value) {
+       try {
+         localStorage.setItem(key, value);
+            } catch (error) {
+       console.error('SetLocalStorage error:', error);
+     }
+        };
+        
+        window.GetLocalStorage = function(key) {
+        try {
+    const value = localStorage.getItem(key) || '';
+ return value;
+    } catch (error) {
+                return '';
+  }
+ };
+   
+   // =====================
+        // Authentication Functions
+     // =====================
+        window.SupabaseRegister = async function(email, password) {
+          if (!supabaseReady || !initSupabase()) {
+    SendMessageToUnity('AuthManager', 'OnRegisterError', 'Supabase not initialized. Please refresh the page.');
+      return;
+  }
+    
+       try {
+  const { data, error } = await supabaseClient.auth.signUp({
+    email: email,
+    password: password
+         });
+    
+      if (error) throw error;
+     
+                if (data.user) {
+  const username = localStorage.getItem('pendingUsername') || 'Player';
+     
+try {
+       const { data: playerData, error: createError } = await supabaseClient
+     .from('player_data')
+   .insert({
+                     user_id: data.user.id,
+               email: email,
+       username: username,
+   levels_unlocked: 5,
+        current_money: 0,
+           unlocked_cosmetics: '[]'
+  })
+         .select()
+       .single();
+           
+        if (!createError && playerData) {
+         SendMessageToUnity('PlayerDataManager', 'OnPlayerDataCreated', JSON.stringify(playerData));
+        }
+        
+ localStorage.removeItem('pendingUsername');
+ } catch (createError) {
+      }
+    }
+        
+          SendMessageToUnity('AuthManager', 'OnRegisterSuccess', JSON.stringify(data));
+            } catch (error) {
+SendMessageToUnity('AuthManager', 'OnRegisterError', error.message);
+     }
+  };
+        
+ window.SupabaseLogin = async function(email, password) {
+     if (!supabaseReady || !initSupabase()) {
+            SendMessageToUnity('AuthManager', 'OnLoginError', 'Supabase not initialized. Please refresh the page.');
+        return;
+        }
+            
+            try {
+    const { data, error } = await supabaseClient.auth.signInWithPassword({
+         email: email,
+        password: password
+       });
+           
+          if (error) throw error;
+      
+      if (data.user) {
+     try {
+const { data: playerData, error: playerError } = await supabaseClient
+      .from('player_data')
+   .select('*')
+           .eq('user_id', data.user.id)
+          .single();
+          
+   if (playerError && playerError.code === 'PGRST116') {
+   const username = email.split('@')[0];
+      
+         const { data: newPlayerData, error: createError } = await supabaseClient
+ .from('player_data')
+    .insert({
+        user_id: data.user.id,
+            email: email,
+      username: username,
+       levels_unlocked: 5,
+    current_money: 0,
+      unlocked_cosmetics: '[]'
+        })
+           .select()
+ .single();
+   
+             if (!createError && newPlayerData) {
+     SendMessageToUnity('PlayerDataManager', 'OnPlayerDataCreated', JSON.stringify(newPlayerData));
+           }
+    } else if (!playerError && playerData) {
+          SendMessageToUnity('PlayerDataManager', 'OnPlayerDataLoaded', JSON.stringify(playerData));
+      }
+         } catch (playerLoadError) {
+    }
+  }
+           
+             SendMessageToUnity('AuthManager', 'OnLoginSuccess', JSON.stringify(data));
+         } catch (error) {
+ SendMessageToUnity('AuthManager', 'OnLoginError', error.message);
+    }
+        };
+        
+    window.SupabaseLogout = async function() {
+  if (!supabaseReady || !initSupabase()) {
+         SendMessageToUnity('AuthManager', 'OnLogoutError', 'Supabase not initialized');
+       return;
+            }
+     
+            try {
+    const { error } = await supabaseClient.auth.signOut();
+         
+   if (error) throw error;
+     
+     // CRITICAL: Clear stored save data to prevent data leak between accounts
+       storedSaveData = null;
+                saveDataTimestamp = 0;
+      console.log('[Supabase] Cleared stored save data on logout');
+      
+             SendMessageToUnity('AuthManager', 'OnLogoutSuccess', '');
+            } catch (error) {
+        SendMessageToUnity('AuthManager', 'OnLogoutError', error.message);
+            }
+ };
+        
+        // =====================
+// Player Data Functions
+        // =====================
+   window.createPlayerData = async function(userId, email, username) {
+      if (!initSupabase()) {
+           SendMessageToUnity('PlayerDataManager', 'OnPlayerDataError', 'Supabase not initialized');
+      return;
+   }
+            
+          try {
+          const { data, error } = await supabaseClient
+            .from('player_data')
+      .insert({
+     user_id: userId,
+        email: email,
+      username: username,
+         levels_unlocked: 5,
+       current_money: 0,
+   unlocked_cosmetics: '[]'
+         })
+       .select()
+             .single();
+      
+    if (error) throw error;
+     
+        SendMessageToUnity('PlayerDataManager', 'OnPlayerDataCreated', JSON.stringify(data));
+  } catch (error) {
+    SendMessageToUnity('PlayerDataManager', 'OnPlayerDataError', error.message);
+  }
+        };
+        
+        window.loadPlayerData = async function(userId) {
+  if (!initSupabase()) {
+ SendMessageToUnity('PlayerDataManager', 'OnPlayerDataError', 'Supabase not initialized');
+    return;
+     }
+    
+   try {
+    const { data, error } = await supabaseClient
+        .from('player_data')
+  .select('*')
+               .eq('user_id', userId)
+      .single();
+      
+    if (error) throw error;
+   
+           SendMessageToUnity('PlayerDataManager', 'OnPlayerDataLoaded', JSON.stringify(data));
+} catch (error) {
+     SendMessageToUnity('PlayerDataManager', 'OnPlayerDataError', error.message);
+     }
+   };
+        
+        window.updatePlayerData = async function(userId, levelsUnlocked, currentMoney, unlockedCosmetics) {
+          if (!initSupabase()) {
+           SendMessageToUnity('PlayerDataManager', 'OnPlayerDataError', 'Supabase not initialized');
+        return;
+     }
+     
+ try {
+     const { data, error } = await supabaseClient
+          .from('player_data')
+          .update({
+         levels_unlocked: parseInt(levelsUnlocked),
+         current_money: parseInt(currentMoney),
+    unlocked_cosmetics: unlockedCosmetics,
+   updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId)
+             .select()
+      .single();
+      
+             if (error) throw error;
+      
+     SendMessageToUnity('PlayerDataManager', 'OnPlayerDataUpdated', JSON.stringify(data));
+     } catch (error) {
+       SendMessageToUnity('PlayerDataManager', 'OnPlayerDataError', error.message);
+      }
+     };
+      
+        window.getCurrentUser = async function() {
+     if (!initSupabase()) {
+   SendMessageToUnity('AuthManager', 'OnGetUserError', 'Supabase not initialized');
+     return;
+            }
+            
+            try {
+          const { data: { user } } = await supabaseClient.auth.getUser();
+                
+          if (user) {
+     SendMessageToUnity('AuthManager', 'OnGetUserSuccess', JSON.stringify(user));
+         } else {
+ SendMessageToUnity('AuthManager', 'OnGetUserError', 'No user logged in');
+     }
+            } catch (error) {
+     SendMessageToUnity('AuthManager', 'OnGetUserError', error.message);
+      }
+        };
+  
+        // =====================
+        // Game Save Functions
+   // =====================
+    
+        // Store save data for Unity to pull when ready
+let storedSaveData = null;
+        let saveDataTimestamp = 0;
+        
+    // Function for Unity to check if save data is available
+window.HasPendingSaveData = function() {
+            return storedSaveData !== null;
+     };
+        
+   // Function for Unity to retrieve the save data
+        window.GetPendingSaveData = function() {
+      console.log('[Supabase] Unity requesting pending save data...');
+            if (storedSaveData !== null) {
+          console.log(`[Supabase] Providing ${storedSaveData.length} chars of save data to Unity`);
+            const data = storedSaveData;
+        storedSaveData = null; // Clear after Unity retrieves it
+            saveDataTimestamp = 0;
+                return data;
+            } else {
+     console.warn('[Supabase] No pending save data available');
+return '[]';
+            }
+};
+        
+     window.LoadAllSaveSlotsJS = async function() {
+            console.log('[Supabase] LoadAllSaveSlotsJS called');
+   
+    if (!initSupabase()) {
+      console.error('[Supabase] Init failed!');
+ storedSaveData = '[]';
+                return;
+      }
+            
+    console.log('[Supabase] Supabase initialized successfully');
+       
+    try {
+     console.log('[Supabase] Getting current user...');
+   const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    
+            if (userError) {
+           console.error('[Supabase] Error getting user:', userError);
+                 throw userError;
+      }
+      
+         if (!user) {
+       console.warn('[Supabase] No user logged in!');
+         storedSaveData = '[]';
+    saveDataTimestamp = Date.now();
+                    console.log('[Supabase] Empty save data stored (no user)');
+         return;
+   }
+    
+       console.log(`[Supabase] User found: ${user.id}`);
+       console.log(`[Supabase] Fetching saves for user...`);
+   
+     const { data, error } = await supabaseClient
+ .from('game_saves')
+        .select('*')
+   .eq('user_id', user.id)
+   .order('slot_number', { ascending: true });
+      
+if (error) {
+              console.error('[Supabase] Error fetching saves:', error);
+          throw error;
+  }
+     
+                console.log(`[Supabase] Loaded ${data ? data.length : 0} saves from database`);
+             console.log('[Supabase] Saves data:', data);
+                
+                const jsonData = JSON.stringify(data || []);
+            console.log(`[Supabase] Storing save data: ${jsonData.substring(0, 100)}...`);
+                
+  // Store data for Unity to pull
+  storedSaveData = jsonData;
+     saveDataTimestamp = Date.now();
+     console.log('[Supabase] Save data stored - Unity can now retrieve it');
+  
+       } catch (error) {
+                console.error('[Supabase] Exception:', error.message);
+   console.error('[Supabase] Stack:', error.stack);
+        storedSaveData = '[]';
+             saveDataTimestamp = Date.now();
+  }
+        };
+        
+        window.SaveSlotToSupabaseJS = async function(slotNumber, username, levelsUnlocked, currentMoney, unlockedCosmetics) {
+      console.log(`[Supabase] SaveSlotToSupabaseJS called for slot ${slotNumber}`);
+            console.log(`[Supabase] Data: ${username}, Level ${levelsUnlocked}, Money ${currentMoney}`);
+    
+         if (!initSupabase()) {
+       console.error('[Supabase] Init failed during save!');
+         return;
+    }
+     
+          try {
+          const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+   
+                if (userError) {
+          console.error('[Supabase] Error getting user:', userError);
+    throw userError;
+  }
+     
+           if (!user) {
+        console.warn('[Supabase] No user logged in, cannot save!');
+              return;
+         }
+          
+        console.log(`[Supabase] Saving to database for user: ${user.id}`);
+      
+    const saveData = {
+     user_id: user.id,
+       slot_number: slotNumber,
+        username: username,
+        levels_unlocked: levelsUnlocked,
+        current_money: currentMoney,
+   unlocked_cosmetics: unlockedCosmetics,
+              last_played: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+                };
+     
+        console.log('[Supabase] Save data:', saveData);
+         
+        const { data, error } = await supabaseClient
+         .from('game_saves')
+         .upsert(saveData, {
+ onConflict: 'user_id,slot_number'
+ })
+   .select()
+          .single();
+      
+                if (error) {
+    console.error('[Supabase] Save error:', error);
+        throw error;
+          }
+  
+       console.log(`[Supabase] Slot ${slotNumber} saved successfully!`);
+       SendMessageToUnity('NewAndLoadGameManager', 'OnSaveSlotSaved', JSON.stringify(saveData));
+      
+   } catch (error) {
+      console.error(`[Supabase] Exception saving slot ${slotNumber}:`, error.message);
+         SendMessageToUnity('NewAndLoadGameManager', 'OnSaveSlotError', error.message);
+ }
+        };
+    
+     window.DeleteSlotFromSupabaseJS = async function(slotNumber) {
+       console.log(`[Supabase] DeleteSlotFromSupabaseJS called for slot ${slotNumber}`);
+
+            if (!initSupabase()) {
+       console.error('[Supabase] Init failed during delete!');
+       return;
+        }
+          
+   try {
+            const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+       
+         if (userError) {
+      console.error('[Supabase] Error getting user:', userError);
+     throw userError;
+    }
+   
+       if (!user) {
+console.warn('[Supabase] No user logged in, cannot delete!');
+     return;
+            }
+  
+      console.log(`[Supabase] Deleting slot ${slotNumber} for user: ${user.id}`);
+      
+              const { error } = await supabaseClient
+           .from('game_saves')
+   .delete()
+     .eq('user_id', user.id)
+       .eq('slot_number', slotNumber);
+   
+      if (error) {
+        console.error('[Supabase] Delete error:', error);
+         throw error;
+ }
+         
+        console.log(`[Supabase] Slot ${slotNumber} deleted successfully!`);
+          SendMessageToUnity('NewAndLoadGameManager', 'OnSaveSlotDeleted', slotNumber.toString());
+          
+    } catch (error) {
+       console.error(`[Supabase] Exception deleting slot ${slotNumber}:`, error.message);
+           SendMessageToUnity('NewAndLoadGameManager', 'OnSaveSlotError', error.message);
+          }
+ };
+        
+        // =====================
+   // Unity WebGL Loader
+ // =====================
+        var container = document.querySelector("#unity-container");
+    var canvas = document.querySelector("#unity-canvas");
+  var loadingBar = document.querySelector("#unity-loading-bar");
+        var progressBarFull = document.querySelector("#unity-progress-bar-full");
+        var fullscreenButton = document.querySelector("#unity-fullscreen-button");
+        var warningBanner = document.querySelector("#unity-warning");
+     
+      function unityShowBanner(msg, type) {
+            function updateBannerVisibility() {
+                warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
+   }
+            var div = document.createElement('div');
+  div.innerHTML = msg;
+            warningBanner.appendChild(div);
+            if (type == 'error') div.style = 'background: red; padding: 10px;';
+            else {
+            if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
+       setTimeout(function() {
+             warningBanner.removeChild(div);
+  updateBannerVisibility();
+         }, 5000);
+            }
+       updateBannerVisibility();
+        }
+        
+        var buildUrl = "Build";
+    var loaderUrl = buildUrl + "/{{{ LOADER_FILENAME }}}";
+        var config = {
+      dataUrl: buildUrl + "/{{{ DATA_FILENAME }}}",
+       frameworkUrl: buildUrl + "/{{{ FRAMEWORK_FILENAME }}}",
+            codeUrl: buildUrl + "/{{{ CODE_FILENAME }}}",
+#if MEMORY_FILENAME
+  memoryUrl: buildUrl + "/{{{ MEMORY_FILENAME }}}",
+#endif
+#if SYMBOLS_FILENAME
+       symbolsUrl: buildUrl + "/{{{ SYMBOLS_FILENAME }}}",
+#endif
+     streamingAssetsUrl: "StreamingAssets",
+companyName: "{{{ COMPANY_NAME }}}",
+    productName: "{{{ PRODUCT_NAME }}}",
+            productVersion: "{{{ PRODUCT_VERSION }}}",
+showBanner: unityShowBanner,
+        };
+        
+  if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+    container.className = "unity-mobile";
+            config.devicePixelRatio = 1;
+        } else {
+            canvas.style.width = "{{{ WIDTH }}}px";
+            canvas.style.height = "{{{ HEIGHT }}}px";
+        }
+        loadingBar.style.display = "block";
+     
+        var script = document.createElement("script");
+        script.src = loaderUrl;
+        script.onload = () => {
+            createUnityInstance(canvas, config, (progress) => {
+       progressBarFull.style.width = 100 * progress + "%";
+     }).then((instance) => {
+  unityInstance = instance;
+           loadingBar.style.display = "none";
+         fullscreenButton.onclick = () => {
+        unityInstance.SetFullscreen(1);
+      };
+          }).catch((message) => {
+       alert(message);
+      });
+        };
+        document.body.appendChild(script);
+    </script>
+</body>
+</html>
