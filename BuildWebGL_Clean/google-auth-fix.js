@@ -58,8 +58,8 @@ window.SupabaseGoogleSignIn = async function() {
         // Calculate popup window position (centered)
         const width = 500;
         const height = 600;
-        const left = (screen.width / 2) - (width / 2);
-        const top = (screen.height / 2) - (height / 2);
+        const left = Math.floor((screen.width / 2) - (width / 2));
+        const top = Math.floor((screen.height / 2) - (height / 2));
         
         // Open OAuth in popup window
         const popup = window.open(

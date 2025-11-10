@@ -53,9 +53,9 @@ SendMessageToUnity('AuthManager', 'OnGoogleSignInError', 'Supabase not initializ
   return;
         }
 
-        console.log('[Google Auth] ? Opening popup...");
+        console.log('[Google Auth] 🚀 Opening popup...');
  
-      // Calculate popup window position (centered)
+        // Calculate popup window position (centered)
         const width = 500;
         const height = 600;
         const left = (screen.width / 2) - (width / 2);
