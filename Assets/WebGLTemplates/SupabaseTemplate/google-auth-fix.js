@@ -9,6 +9,31 @@
 
 console.log('[Google Auth Fix] Loading FAST popup-based Google authentication...');
 
+// CRITICAL: Detect if we're running inside the OAuth popup
+if (window.opener && window.opener !== window) {
+    console.log('[Google Auth Fix] Running inside popup - checking for auth tokens...');
+    
+    // Check if URL contains OAuth tokens (from Google redirect)
+    const urlParams = new URLSearchParams(window.location.search);
+    const hashParams = new URLSearchParams(window.location.hash.substring(1));
+    
+    const hasCode = urlParams.has('code');
+    const hasAccessToken = hashParams.has('access_token');
+    
+    if (hasCode || hasAccessToken) {
+        console.log('[Google Auth Fix] ✅ OAuth tokens detected in popup! Closing...');
+        
+        // Give Supabase a moment to process the tokens, then close
+        setTimeout(() => {
+            console.log('[Google Auth Fix] Closing popup now');
+            window.close();
+        }, 1000);
+        
+        // Stop loading the rest of the page
+        throw new Error('OAuth popup - stopping page load');
+    }
+}
+
 // Store the original function if it exists
 if (typeof window.SupabaseGoogleSignIn !== 'undefined') {
     window.OriginalSupabaseGoogleSignIn = window.SupabaseGoogleSignIn;
