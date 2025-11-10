@@ -7,6 +7,17 @@
     <link rel="shortcut icon" href="TemplateData/favicon.ico">
     <link rel="stylesheet" href="TemplateData/style.css">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
+    <script src="google-auth-fix.js"></script>
+    <style>
+        /* Prevent page scrolling */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+    </style>
 </head>
 <body>
     <div id="unity-container" class="unity-desktop">
@@ -76,7 +87,8 @@ return true;
        return true;
       }
         
-    // Google Sign-In Function
+    // Google Sign-In Function (DISABLED - using google-auth-fix.js popup version instead)
+    /*
 window.SupabaseGoogleSignIn = async function() {
  try {
   console.log('[Supabase] Starting Google Sign-In...');
@@ -103,6 +115,7 @@ const { data, error } = await window.supabase.auth.signInWithOAuth({
     SendMessageToUnity('AuthManager', 'OnGoogleSignInError', error.message);
             }
      };
+    */
         
     // Clear any existing session on page load (forces explicit login)
     async function clearExistingSession() {
