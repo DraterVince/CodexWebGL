@@ -34,7 +34,7 @@ public class UIAuth : MonoBehaviour
     
     [Header("Scene Navigation")]
     public string sceneToLoadAfterLogin = "MainMenu";
-    public float delayBeforeSceneLoad = 2f;
+    public float delayBeforeSceneLoad = 1f; // Reduced from 2f to 1f for faster response
   
     private bool hasEnabledButtons = false;
     private bool isCheckingExistingSession = false;
@@ -327,53 +327,97 @@ NewAndLoadGameManager.Instance.SetUserId(userId);
     }
     
     /// <summary>
-    /// Google Sign-In Handler
+    /// Google Sign-In Handler - OPTIMIZED FOR SPEED
     /// </summary>
     public async void OnGoogleSignInClicked()
     {
 #if UNITY_WEBGL && !UNITY_EDITOR
-     if (!SupabaseReadyManager.IsSupabaseReady())
-     {
-         if (loadingText != null) loadingText.text = "Please wait...";
-        return;
-    }
-        
-        if (loadingPanel != null)
+        if (!SupabaseReadyManager.IsSupabaseReady())
         {
-            loadingPanel.SetActive(true);
-    if (loadingText != null) loadingText.text = "Signing in with Google...";
+            if (loadingText != null) loadingText.text = "Please wait...";
+        return;
         }
         
+   Debug.Log("[UIAuth] Google Sign-In button clicked");
+     
+   if (loadingPanel != null)
+        {
+            loadingPanel.SetActive(true);
+ if (loadingText != null) loadingText.text = "Opening Google Sign-In...";
+        }
+        
+        // Disable buttons to prevent double-click
+      if (googleSignInButton != null) googleSignInButton.interactable = false;
+   if (loginButton != null) loginButton.interactable = false;
+   if (registerButton != null) registerButton.interactable = false;
+        
+        Debug.Log("[UIAuth] Calling AuthManager.SignInWithGoogle()...");
+        
+        // The popup will handle the auth - this returns quickly once popup closes
         bool success = await AuthManager.Instance.SignInWithGoogle();
         
+  Debug.Log($"[UIAuth] Google Sign-In result: {success}");
+     
         if (success)
         {
-     Debug.Log("[UIAuth] Google Sign-In successful!");
-         
-  // Set user ID
-         if (PlayerDataManager.Instance != null && PlayerDataManager.Instance.GetCurrentPlayerData() != null)
-            {
-    string userId = PlayerDataManager.Instance.GetCurrentPlayerData().user_id;
-           
-          if (NewAndLoadGameManager.Instance != null)
-        {
-   NewAndLoadGameManager.Instance.SetUserId(userId);
-   }
-    }
+ Debug.Log("[UIAuth] ? Google Sign-In successful!");
+      
+         if (loadingText != null) loadingText.text = "Loading...";
             
- // Load main menu
-     await Task.Delay((int)(delayBeforeSceneLoad * 1000));
-            SceneManager.LoadScene(sceneToLoadAfterLogin);
-     }
-      else
+  // Quick wait for PlayerDataManager (reduced from 30 attempts to 10)
+      int attempts = 0;
+            while (attempts < 10) // Max 1 second wait
+            {
+         if (PlayerDataManager.Instance != null && PlayerDataManager.Instance.GetCurrentPlayerData() != null)
     {
-            Debug.LogError("[UIAuth] Google Sign-In failed!");
-if (loadingPanel != null) loadingPanel.SetActive(false);
+           break;
+                }
+await Task.Delay(100);
+attempts++;
+     }
+            
+            // Set user ID
+  if (PlayerDataManager.Instance != null && PlayerDataManager.Instance.GetCurrentPlayerData() != null)
+            {
+                string userId = PlayerDataManager.Instance.GetCurrentPlayerData().user_id;
+       string userName = PlayerDataManager.Instance.GetCurrentPlayerData().username;
     
+     Debug.Log($"[UIAuth] Setting user ID: {userId}, Username: {userName}");
+     
+          if (NewAndLoadGameManager.Instance != null)
+ {
+               NewAndLoadGameManager.Instance.SetUserId(userId);
+       Debug.Log("[UIAuth] User ID set in NewAndLoadGameManager");
+     }
+            }
+else
+         {
+      Debug.LogWarning("[UIAuth] PlayerDataManager not ready - proceeding anyway");
+ }
+  
+      // Load main menu quickly
+            if (loadingText != null) loadingText.text = $"Loading {sceneToLoadAfterLogin}...";
+ 
+            // Reduced delay for faster transition
+            await Task.Delay((int)(delayBeforeSceneLoad * 1000));
+            
+         Debug.Log($"[UIAuth] Loading scene: {sceneToLoadAfterLogin}");
+     SceneManager.LoadScene(sceneToLoadAfterLogin);
+ }
+      else
+ {
+          Debug.LogError("[UIAuth] ? Google Sign-In failed!");
+       if (loadingPanel != null) loadingPanel.SetActive(false);
+       
             if (logFailPanel != null)
             {
    logFailPanel.SetActive(true);
-            }
+      }
+      
+     // Re-enable buttons
+            if (googleSignInButton != null) googleSignInButton.interactable = true;
+            if (loginButton != null) loginButton.interactable = true;
+       if (registerButton != null) registerButton.interactable = true;
         }
 #else
         Debug.LogWarning("[UIAuth] Google Sign-In only works in WebGL builds");

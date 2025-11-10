@@ -345,31 +345,42 @@ registerTaskSource?.TrySetResult(false);
 var authResponse = JsonUtility.FromJson<SupabaseAuthResponse>(jsonData);
        if (authResponse != null && authResponse.user != null)
   {
-                // Extract username from email or use metadata
+    Debug.Log($"[AuthManager] ? Google Sign-In successful! User: {authResponse.user.email}");
+                
+          // Extract username from email or use metadata
     string username = authResponse.user.email.Split('@')[0];
         
-            if (PlayerDataManager.Instance != null)
+ if (PlayerDataManager.Instance != null)
     {
       // Check if player data exists, if not create it
      PlayerDataManager.Instance.LoadOrCreatePlayerData(
      authResponse.user.id,
-            authResponse.user.email,
-            username
+    authResponse.user.email,
+   username
        );
+  
+        Debug.Log($"[AuthManager] Player data loaded for Google user: {username}");
     }
        
 #if UNITY_WEBGL && !UNITY_EDITOR
    googleSignInTaskSource?.TrySetResult(true);
 #endif
-         }
+      }
+        else
+        {
+       Debug.LogError("[AuthManager] Google sign-in response missing user data");
+#if UNITY_WEBGL && !UNITY_EDITOR
+         googleSignInTaskSource?.TrySetResult(false);
+#endif
+        }
         }
      catch (Exception ex)
-      {
+{
        Debug.LogError($"[AuthManager] Google sign-in error: {ex.Message}");
 #if UNITY_WEBGL && !UNITY_EDITOR
       googleSignInTaskSource?.TrySetResult(false);
 #endif
-      }
+  }
     }
     
     /// <summary>
