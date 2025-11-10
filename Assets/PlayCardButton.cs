@@ -58,6 +58,9 @@ public class PlayCardButton : MonoBehaviour
 
     Transform parent;
     [SerializeField] Transform playedCard;
+    
+    // Button reference to enable/disable based on card presence
+    private Button playButton;
 
     // Multiplayer support (uses reflection to avoid compile errors)
     private bool isMultiplayerMode = false;
@@ -70,17 +73,24 @@ public class PlayCardButton : MonoBehaviour
     private void Start()
     {
         cardManager = FindAnyObjectByType<CardManager>();
+        
+ // Get Button component
+   playButton = GetComponent<Button>();
+        if (playButton == null)
+      {
+            Debug.LogWarning("[PlayCardButton] No Button component found on this GameObject!");
+        }
 
         if (playerCharacter != null)
         {
-            playerJumpAttack = playerCharacter.GetComponent<CharacterJumpAttack>();
+          playerJumpAttack = playerCharacter.GetComponent<CharacterJumpAttack>();
             if (playerJumpAttack == null && useJumpAttackAnimation)
-            {
-                Debug.LogWarning("CharacterJumpAttack component not found on player character. Add it to enable jump attack animation.");
-            }
+  {
+        Debug.LogWarning("CharacterJumpAttack component not found on player character. Add it to enable jump attack animation.");
+ }
         }
 
-        // Check if in multiplayer mode using reflection
+     // Check if in multiplayer mode using reflection
         DetectMultiplayerMode();
     }
 
@@ -120,46 +130,53 @@ public class PlayCardButton : MonoBehaviour
 
     private void Update()
     {
+        // Enable/disable button based on whether there's a card in PlayedCard holder
+ if (playButton != null)
+        {
+        parent = transform.Find("PlayedCard");
+            bool hasCard = parent != null && parent.childCount > 0;
+          playButton.interactable = hasCard;
+        }
+        
     // Health and UI updates
         if (!isMultiplayerMode)
  {
         // Single player mode
   if (playerHealthAmount <= 0f)
             {
-                GameOverScreen.SetActive(true);
-            }
+     GameOverScreen.SetActive(true);
+  }
 
    playerHP.text = playerHealthAmount.ToString() + " / " + playerHealthTotal.ToString();
             playerHealthBar.fillAmount = playerHealthAmount / playerHealthTotal;
      }
         else
    {
-       // Multiplayer mode: manage card visibility based on turn
-            UpdateCardVisibility();
+     // Multiplayer mode: manage card visibility based on turn
+  UpdateCardVisibility();
         }
 
-        // Enemy health display - only update if not waiting for animation
+   // Enemy health display - only update if not waiting for animation
   if (!delayHealthUIUpdate && enemyManager.counter < enemyHealthAmount.Count)
    {
-            enemyHP.text = enemyHealthAmount[enemyManager.counter].ToString() + " / " + enemyHealthTotal[enemyManager.counter].ToString();
+      enemyHP.text = enemyHealthAmount[enemyManager.counter].ToString() + " / " + enemyHealthTotal[enemyManager.counter].ToString();
          enemyHealthBar[enemyManager.counter].fillAmount = enemyHealthAmount[enemyManager.counter] / enemyHealthTotal[enemyManager.counter];
   }
 
      // Victory check (moved here to work in both modes)
   if (enemyManager.counter >= enemyManager.enemies.Count)
-        {
-            if (!isMultiplayerMode)
-            {
+{
+     if (!isMultiplayerMode)
+          {
          nextLevel = SceneManager.GetActiveScene().buildIndex + 1;
        if (nextLevel > PlayerPrefs.GetInt("levelAt"))
      {
        PlayerPrefs.SetInt("levelAt", nextLevel);
       }
     }
-            YouWinScreen.SetActive(true);
+   YouWinScreen.SetActive(true);
  }
     }
-
     /// <summary>
     /// Update card visibility based on whose turn it is
     /// ALL players see the SAME cards, just hidden when not their turn
@@ -183,20 +200,41 @@ public class PlayCardButton : MonoBehaviour
 
     public void PlayButton()
     {
-        // Check if it's player's turn in multiplayer using reflection
+    // Check if it's player's turn in multiplayer using reflection
         if (isMultiplayerMode && !IsMyTurn())
         {
             Debug.Log("[PlayCardButton] Not your turn!");
-            return;
+     return;
         }
 
-        parent = transform.Find("PlayedCard");
-        playedCard = parent.GetChild(0);
+        // SAFETY CHECK: Validate PlayedCard parent exists
+    parent = transform.Find("PlayedCard");
+   if (parent == null)
+        {
+   // Silently do nothing - no error, no log spam
+      return;
+        }
+        
+        // SAFETY CHECK: Validate parent has a child card
+    if (parent.childCount == 0)
+   {
+ // Silently do nothing - no card to play
+  return;
+        }
+        
+      playedCard = parent.GetChild(0);
+     
+        // SAFETY CHECK: Validate we got the card
+  if (playedCard == null)
+ {
+        // Silently do nothing
+       return;
+     }
         
         // Store the played card name for checking
         string playedCardName = playedCard.name;
 
-        for (int i = 0; i < correctAnswersContainer[outputManager.counter].correctAnswers.Count; i++)
+  for (int i = 0; i < correctAnswersContainer[outputManager.counter].correctAnswers.Count; i++)
         {
             if (counter == i)
             {
