@@ -133,8 +133,8 @@ const { data, error } = await window.supabase.auth.signInWithOAuth({
     
     // Auth State Change Listener (handles OAuth redirects)
     async function setupAuthListener() {
-        // Clear existing session first (forces manual login)
-        await clearExistingSession();
+        // DON'T clear session - let OAuth persist!
+        // await clearExistingSession(); // DISABLED - was breaking OAuth
         
         window.supabase.auth.onAuthStateChange(async (event, session) => {
             console.log('[Supabase] Auth state changed:', event);
