@@ -81,8 +81,8 @@ window.SupabaseGoogleSignIn = async function() {
  try {
   console.log('[Supabase] Starting Google Sign-In...');
        
-   // Use itch.io URL for redirect (production)
-      const redirectUrl = 'https://vinceisme.itch.io/codex';
+   // Use custom domain for redirect (production)
+      const redirectUrl = 'https://codex-game.online';
       console.log('[Supabase] Redirect URL:', redirectUrl);
 
 const { data, error } = await window.supabase.auth.signInWithOAuth({
