@@ -524,6 +524,8 @@ foreach (var material in renderer.materials)
 
         if (useCharacterButton != null)
         {
+            // Make button invisible if character is locked
+            useCharacterButton.gameObject.SetActive(!isLocked);
             useCharacterButton.interactable = !isLocked;
 
         Text buttonText = useCharacterButton.GetComponentInChildren<Text>();
