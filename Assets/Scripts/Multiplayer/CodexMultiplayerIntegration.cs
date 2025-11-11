@@ -130,6 +130,14 @@ public class CodexMultiplayerIntegration : MonoBehaviourPunCallbacks
     }
 
     /// <summary>
+    /// Get the current player turn index (safe to call every frame)
+    /// </summary>
+    public int GetCurrentPlayerTurnIndex()
+    {
+        return currentPlayerTurn;
+    }
+    
+    /// <summary>
     /// Get the current player whose turn it is
     /// </summary>
     public Player GetCurrentTurnPlayer()
@@ -140,31 +148,14 @@ public class CodexMultiplayerIntegration : MonoBehaviourPunCallbacks
             return null;
         }
 
-        object currentTurnObj;
-        if (PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue("CurrentTurn", out currentTurnObj))
-     {
-    int turnIndex = (int)currentTurnObj;
-       // Don't log every frame - this is called in Update()
-    
- if (turnIndex >= 0 && turnIndex < PhotonNetwork.PlayerList.Length)
-      {
-           Player currentPlayer = PhotonNetwork.PlayerList[turnIndex];
-       // Don't log every frame - this is called in Update()
-      return currentPlayer;
-          }
-            else
-      {
-                Debug.LogWarning($"[CodexMultiplayerIntegration] Turn index {turnIndex} out of range for {PhotonNetwork.PlayerList.Length} players");
-            }
+        // Use the cached currentPlayerTurn instead of reading from room properties
+        if (currentPlayerTurn >= 0 && currentPlayerTurn < PhotonNetwork.PlayerList.Length)
+        {
+            return PhotonNetwork.PlayerList[currentPlayerTurn];
         }
-else
-   {
-   // Only log once on initialization failure, not every frame
-   if (!hasLoggedMissingTurnProperty)
-   {
-       Debug.LogWarning("[CodexMultiplayerIntegration] 'CurrentTurn' property not found in room! Turn system may not be initialized.");
-       hasLoggedMissingTurnProperty = true;
-   }
+        else
+        {
+            Debug.LogWarning($"[CodexMultiplayerIntegration] Turn index {currentPlayerTurn} out of range for {PhotonNetwork.PlayerList.Length} players");
         }
 
         return null;

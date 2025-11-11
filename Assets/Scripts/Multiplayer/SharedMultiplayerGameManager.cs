@@ -767,7 +767,15 @@ bool isMyTurn = (player.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
             }
         }
         
-        Player currentTurnPlayer = turnSystem.GetCurrentTurnPlayer();
+        // CRITICAL FIX: Get current turn player directly from PhotonNetwork.PlayerList
+        // Don't use GetCurrentTurnPlayer() which reads from room properties (race condition!)
+        Player currentTurnPlayer = null;
+        int currentTurnIndex = turnSystem.GetCurrentPlayerTurnIndex();
+        if (currentTurnIndex >= 0 && currentTurnIndex < PhotonNetwork.PlayerList.Length)
+        {
+            currentTurnPlayer = PhotonNetwork.PlayerList[currentTurnIndex];
+        }
+        
         Log($"Current turn player: {currentTurnPlayer?.NickName} (ActorNumber: {currentTurnPlayer?.ActorNumber})");
         
         bool isMyTurn = (currentTurnPlayer != null && currentTurnPlayer.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
