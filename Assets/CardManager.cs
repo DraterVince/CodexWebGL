@@ -11,6 +11,7 @@ public class CardManager : MonoBehaviour
 
     private List<Item> chosenCards = new List<Item>();
     private bool isRandomizing = false; // Prevent multiple simultaneous randomizations
+    private Coroutine currentRandomizeCoroutine = null; // Track active coroutine
 
     [System.Serializable]
     public class CardListContainer
@@ -27,9 +28,35 @@ public class CardManager : MonoBehaviour
     private void Start()
     {
         Time.timeScale = 1f;
-        StartCoroutine(Randomize());
+        
+        // In multiplayer mode, don't auto-randomize
+        // The turn system will handle randomization via RPC_SyncAllCounters
+        bool isMultiplayer = Photon.Pun.PhotonNetwork.IsConnected && Photon.Pun.PhotonNetwork.InRoom;
+        
+        if (!isMultiplayer)
+        {
+            currentRandomizeCoroutine = StartCoroutine(Randomize());
+        }
+        else
+        {
+            Debug.Log("[CardManager] Multiplayer mode detected - skipping auto-randomization (turn system will handle it)");
+        }
     }
 
+    /// <summary>
+    /// Force stop any ongoing randomization (useful for multiplayer sync)
+    /// </summary>
+    public void CancelRandomization()
+    {
+        if (isRandomizing && currentRandomizeCoroutine != null)
+        {
+            Debug.Log("[CardManager] Canceling ongoing randomization");
+            StopCoroutine(currentRandomizeCoroutine);
+            isRandomizing = false;
+            currentRandomizeCoroutine = null;
+        }
+    }
+    
     public IEnumerator Randomize()
     {
         // Prevent multiple simultaneous randomizations
@@ -50,6 +77,7 @@ public class CardManager : MonoBehaviour
         {
             Debug.LogWarning($"CardManager counter {counter} is out of range. Cannot randomize cards.");
             isRandomizing = false;
+            currentRandomizeCoroutine = null;
             yield break;
         }
 
@@ -99,6 +127,7 @@ public class CardManager : MonoBehaviour
         }
         
         isRandomizing = false;
+        currentRandomizeCoroutine = null;
         Debug.Log($"[CardManager] ===== RANDOMIZE COMPLETE ({cardDisplayContainer[counter].cardDisplay.Count} cards activated) =====");
     }
 

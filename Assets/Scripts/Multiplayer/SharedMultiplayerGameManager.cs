@@ -797,6 +797,9 @@ bool isMyTurn = (player.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
             
             Log($"✓ It's my turn! Resetting and randomizing cards with counter={cardManager.counter}");
             
+            // Cancel any ongoing randomization first
+            cardManager.CancelRandomization();
+            
             // Reset cards back to grid (using newly-synced cardManager.counter)
             cardManager.ResetCards();
             Log($"Cards reset for question {cardManager.counter}");
