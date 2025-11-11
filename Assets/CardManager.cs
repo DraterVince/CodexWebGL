@@ -31,16 +31,30 @@ public class CardManager : MonoBehaviour
 
     public IEnumerator Randomize()
     {
+        Debug.Log($"[CardManager] ===== RANDOMIZE STARTED =====");
+        Debug.Log($"[CardManager] Counter: {counter}");
+        Debug.Log($"[CardManager] cardContainer.Count: {cardContainer.Count}");
+        Debug.Log($"[CardManager] cardDisplayContainer.Count: {cardDisplayContainer.Count}");
+        
         if (counter < 0 || counter >= cardContainer.Count || counter >= cardDisplayContainer.Count)
         {
             Debug.LogWarning($"CardManager counter {counter} is out of range. Cannot randomize cards.");
             yield break;
         }
 
+        Debug.Log($"[CardManager] cardContainer[{counter}].cards.Count: {cardContainer[counter].cards.Count}");
+        Debug.Log($"[CardManager] cardDisplayContainer[{counter}].cardDisplay.Count: {cardDisplayContainer[counter].cardDisplay.Count}");
+        
         chosenCards = new List<Item>(cardContainer[counter].cards);
+        Debug.Log($"[CardManager] chosenCards populated with {chosenCards.Count} items");
 
         for (int i = 0; i < cardDisplayContainer[counter].cardDisplay.Count; i++)
         {
+            Debug.Log($"[CardManager] Randomizing card {i + 1}/{cardDisplayContainer[counter].cardDisplay.Count}");
+            Debug.Log($"[CardManager]   Card GameObject: {cardDisplayContainer[counter].cardDisplay[i].gameObject.name}");
+            Debug.Log($"[CardManager]   Card Parent: {cardDisplayContainer[counter].cardDisplay[i].gameObject.transform.parent?.name ?? "NULL"}");
+            Debug.Log($"[CardManager]   Card Active: {cardDisplayContainer[counter].cardDisplay[i].gameObject.activeSelf}");
+            
             int rand = Random.Range(0, chosenCards.Count);
 
             cardDisplayContainer[counter].cardDisplay[i].cardName = chosenCards[rand].cardName;
@@ -50,13 +64,20 @@ public class CardManager : MonoBehaviour
             yield return new WaitForSeconds(0.15f);
             cardDisplayContainer[counter].cardDisplay[i].gameObject.SetActive(true);
             cardDisplayContainer[counter].cardDisplay[i].gameObject.transform.localScale = Vector3.one;
+            
+            Debug.Log($"[CardManager]   ✓ Card activated with name: {chosenCards[rand].cardName}");
 
             chosenCards.RemoveAt(rand);
         }
+        
+        Debug.Log($"[CardManager] ===== RANDOMIZE COMPLETE ({cardDisplayContainer[counter].cardDisplay.Count} cards activated) =====");
     }
 
     public void ResetCards()
     {
+        Debug.Log($"[CardManager] ===== RESET CARDS STARTED =====");
+        Debug.Log($"[CardManager] Counter: {counter}");
+        
         chosenCards.Clear();
 
         if (counter < 0 || counter >= cardDisplayContainer.Count)
@@ -65,12 +86,19 @@ public class CardManager : MonoBehaviour
             return;
         }
 
+        Debug.Log($"[CardManager] cardDisplayContainer[{counter}].cardDisplay.Count: {cardDisplayContainer[counter].cardDisplay.Count}");
+        
         // Reset cards in the display container (grid area)
         for (int i = 0; i < cardDisplayContainer[counter].cardDisplay.Count; i++)
         {
+            GameObject cardObj = cardDisplayContainer[counter].cardDisplay[i].gameObject;
+            Debug.Log($"[CardManager] Resetting card {i}: {cardObj.name} (Parent: {cardObj.transform.parent?.name ?? "NULL"}, Active: {cardObj.activeSelf})");
+            
             cardDisplayContainer[counter].cardDisplay[i].gameObject.SetActive(false);
             cardDisplayContainer[counter].cardDisplay[i].gameObject.transform.SetParent(grid.transform);
             cardDisplayContainer[counter].cardDisplay[i].gameObject.transform.localScale = Vector3.one;
+            
+            Debug.Log($"[CardManager]   ✓ Moved to grid, deactivated");
         }
 
         // Also check and clear ANY cards stuck in PlayedCard holders
@@ -78,6 +106,7 @@ public class CardManager : MonoBehaviour
         GameObject[] allObjects = FindObjectsOfType<GameObject>();
         int cardsCleared = 0;
 
+        Debug.Log($"[CardManager] Searching for PlayedCard holders...");
         foreach (GameObject obj in allObjects)
         {
             if (obj.name == "PlayedCard" && obj.transform.childCount > 0)
@@ -101,6 +130,12 @@ public class CardManager : MonoBehaviour
         {
             Debug.Log($"[CardManager] Successfully cleared {cardsCleared} cards from PlayedCard holders");
         }
+        else
+        {
+            Debug.Log($"[CardManager] No cards found in PlayedCard holders");
+        }
+        
+        Debug.Log($"[CardManager] ===== RESET CARDS COMPLETE =====");
     }
 
     /// <summary>

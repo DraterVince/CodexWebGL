@@ -609,18 +609,19 @@ bool isMyTurn = (player.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
         // Update UI
         UpdateTurnUI();
   
-        // **CRITICAL: Master Client syncs ALL counters to ensure global consistency**
-        if (PhotonNetwork.IsMasterClient)
-        {
-            Log("Master Client - syncing all counters globally before turn starts");
-            SyncAllCountersGlobally();
-        }
-  
-        // **CRITICAL FIX: Force card reset via RPC to ensure ALL clients reset**
+        // **CRITICAL FIX: Force card reset via RPC FIRST to clear played cards for all players**
         if (PhotonNetwork.IsMasterClient)
         {
             Log("Master Client - forcing card reset via RPC for all players");
             photonView.RPC("RPC_ForceCardReset", RpcTarget.All);
+        }
+  
+        // **CRITICAL: Master Client syncs ALL counters to ensure global consistency**
+        // This also triggers card randomization for the active player (happens after RPC_ForceCardReset)
+        if (PhotonNetwork.IsMasterClient)
+        {
+            Log("Master Client - syncing all counters globally before turn starts");
+            SyncAllCountersGlobally();
         }
      
         // Enable/Disable controls based on whose turn it is
@@ -634,10 +635,6 @@ bool isMyTurn = (player.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
   cardManager.grid.SetActive(true);
               Log("Card grid activated");
               
-              // CRITICAL FIX: Ensure cards are visible by calling ResetCards
-              // This ensures cards are properly positioned in the grid
-              Log("Ensuring cards are visible for new turn");
-              
               // Log current counter states (DO NOT MODIFY - they should already be synced via RPC)
               if (playCardButton != null && playCardButton.outputManager != null)
               {
@@ -648,13 +645,9 @@ bool isMyTurn = (player.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
                   Log($"======================");
               }
               
-              // Reset cards back to grid (using already-synced cardManager.counter)
-              cardManager.ResetCards();
-              Log($"Cards reset for question {cardManager.counter}");
-              
-              // Randomize cards for the current question
-              cardManager.StartCoroutine(cardManager.Randomize());
-              Log($"Started randomizing cards for question {cardManager.counter}");
+              // NOTE: Card reset and randomization now happens in RPC_SyncAllCounters
+              // after counters are synced to ensure correct counter values
+              Log("Waiting for RPC_SyncAllCounters to reset and randomize cards...");
      }
             
             // Start timer only for the player whose turn it is
@@ -747,6 +740,29 @@ bool isMyTurn = (player.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
         }
         
         Log("===== ALL COUNTERS SYNCED =====");
+        
+        // CRITICAL FIX: After counters are synced, if it's my turn, reset and randomize cards
+        // This ensures cards are randomized with the CORRECT counter values
+        if (turnSystem != null)
+        {
+            Player currentTurnPlayer = turnSystem.GetCurrentTurnPlayer();
+            bool isMyTurn = (currentTurnPlayer != null && currentTurnPlayer.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
+            
+            Log($"Checking if should randomize cards: isMyTurn={isMyTurn}");
+            
+            if (isMyTurn && cardManager != null && cardManager.grid != null)
+            {
+                Log($"✓ It's my turn! Resetting and randomizing cards with counter={cardManager.counter}");
+                
+                // Reset cards back to grid (using newly-synced cardManager.counter)
+                cardManager.ResetCards();
+                Log($"Cards reset for question {cardManager.counter}");
+                
+                // Randomize cards for the current question
+                cardManager.StartCoroutine(cardManager.Randomize());
+                Log($"Started randomizing cards for question {cardManager.counter}");
+            }
+        }
     }
     
     /// <summary>
