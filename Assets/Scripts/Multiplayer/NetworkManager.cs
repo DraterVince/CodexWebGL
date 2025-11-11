@@ -113,16 +113,21 @@ public class NetworkManager : MonoBehaviourPunCallbacks
 
     public void ConnectToPhoton()
     {
-        if (!PhotonNetwork.IsConnected)
-        {
-            Debug.Log("[NetworkManager] Connecting to Photon...");
-            PhotonNetwork.GameVersion = gameVersion;
-            PhotonNetwork.ConnectUsingSettings();
-        }
-        else
+        if (PhotonNetwork.IsConnected)
         {
             Debug.Log("[NetworkManager] Already connected to Photon");
+            return;
         }
+        
+        if (PhotonNetwork.IsConnectedAndReady)
+        {
+            Debug.Log("[NetworkManager] Already connected and ready");
+            return;
+        }
+        
+        Debug.Log("[NetworkManager] Connecting to Photon...");
+        PhotonNetwork.GameVersion = gameVersion;
+        PhotonNetwork.ConnectUsingSettings();
     }
 
     public void Disconnect()
@@ -136,6 +141,18 @@ public class NetworkManager : MonoBehaviourPunCallbacks
 
     public void CreateRoom(string roomName)
     {
+        if (!PhotonNetwork.IsConnectedAndReady)
+        {
+            Debug.LogError("[NetworkManager] Cannot create room - not connected to Photon! Call ConnectToPhoton() first.");
+            return;
+        }
+        
+        if (PhotonNetwork.InRoom)
+        {
+            Debug.LogWarning("[NetworkManager] Already in a room. Leave current room first.");
+            return;
+        }
+        
         if (string.IsNullOrEmpty(roomName))
         {
             roomName = "Room_" + Random.Range(1000, 9999);
@@ -154,6 +171,18 @@ public class NetworkManager : MonoBehaviourPunCallbacks
 
     public void JoinRoom(string roomName)
     {
+        if (!PhotonNetwork.IsConnectedAndReady)
+        {
+            Debug.LogError("[NetworkManager] Cannot join room - not connected to Photon! Call ConnectToPhoton() first.");
+            return;
+        }
+        
+        if (PhotonNetwork.InRoom)
+        {
+            Debug.LogWarning("[NetworkManager] Already in a room. Leave current room first.");
+            return;
+        }
+        
         if (!string.IsNullOrEmpty(roomName))
         {
             PhotonNetwork.JoinRoom(roomName);

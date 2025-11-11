@@ -91,6 +91,14 @@ private Dictionary<int, GameObject> playerCharacters = new Dictionary<int, GameO
   private void Awake()
 {
         photonView = GetComponent<PhotonView>();
+        
+        if (photonView == null)
+        {
+            LogError("CRITICAL: PhotonView component is missing! Add a PhotonView component to this GameObject.");
+            enabled = false;
+            return;
+        }
+        
    turnSystem = GetComponent<CodexMultiplayerIntegration>();
         
         if (turnSystem == null)
@@ -101,6 +109,15 @@ private Dictionary<int, GameObject> playerCharacters = new Dictionary<int, GameO
     
     private void Start()
     {
+        // Validate PhotonView exists
+        if (photonView == null)
+        {
+            LogError("CRITICAL: PhotonView is null! Cannot use multiplayer features.");
+            HideMultiplayerUI();
+            enabled = false;
+            return;
+        }
+        
       if (!PhotonNetwork.IsConnected || !PhotonNetwork.InRoom)
         {
             LogWarning("Not in Photon room. Disabling.");
@@ -224,7 +241,7 @@ enabled = false;
   if (!PhotonNetwork.IsMasterClient) return;
 
         currentSharedHealth -= damage;
-    currentSharedHealth = Mathf.Min(0f, currentSharedHealth);
+    currentSharedHealth = Mathf.Max(0f, currentSharedHealth); // Fixed: Use Max to prevent negative health
         
         ExitGames.Client.Photon.Hashtable roomProps = new ExitGames.Client.Photon.Hashtable
         {

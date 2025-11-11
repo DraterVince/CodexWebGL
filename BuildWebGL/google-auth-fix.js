@@ -1,4 +1,5 @@
 if (window.opener && window.opener !== window) {
+    
     const urlParams = new URLSearchParams(window.location.search);
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
     
@@ -149,7 +150,7 @@ async function waitForUnityInstance(maxWaitMs = 5000) {
 function SendMessageToUnity(gameObject, method, message) {
     try {
         if (typeof unityInstance !== 'undefined' && unityInstance !== null) {
-      unityInstance.SendMessage(gameObject, method, message || '');
+            unityInstance.SendMessage(gameObject, method, message || '');
         }
     } catch (e) {}
 }
