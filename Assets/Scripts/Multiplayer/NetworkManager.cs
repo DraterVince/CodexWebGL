@@ -287,6 +287,32 @@ public class NetworkManager : MonoBehaviourPunCallbacks
         Debug.Log($"New Master Client: {newMasterClient.NickName}");
     }
 
+    public override void OnJoinedRoom()
+    {
+        base.OnJoinedRoom();
+        
+        // If Master Client, ensure scene is synced
+        if (PhotonNetwork.IsMasterClient && PhotonNetwork.AutomaticallySyncScene)
+        {
+            string currentScene = SceneManager.GetActiveScene().name;
+            Debug.Log($"[NetworkManager] Master Client - syncing scene: {currentScene}");
+            // Scene will be synced automatically via AutomaticallySyncScene
+        }
+    }
+
+    public override void OnPlayerEnteredRoom(Player newPlayer)
+    {
+        base.OnPlayerEnteredRoom(newPlayer);
+        Debug.Log($"Player joined: {newPlayer.NickName} (Total: {PhotonNetwork.CurrentRoom.PlayerCount})");
+        
+        // If we're Master Client and new player joins, ensure they get the current scene
+        if (PhotonNetwork.IsMasterClient && PhotonNetwork.AutomaticallySyncScene)
+        {
+            string currentScene = SceneManager.GetActiveScene().name;
+            Debug.Log($"[NetworkManager] New player joined - current scene is: {currentScene}");
+        }
+    }
+
     public void SetPlayerNickname(string nickname)
     {
         if (!string.IsNullOrEmpty(nickname))

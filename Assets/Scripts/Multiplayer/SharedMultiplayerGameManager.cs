@@ -627,6 +627,9 @@ bool isMyTurn = (player.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
   cardManager.grid.SetActive(true);
               Log("Card grid activated");
      }
+            
+            // Start timer only for the player whose turn it is
+            StartTimerForCurrentPlayer();
         }
         else
         {
@@ -638,6 +641,14 @@ bool isMyTurn = (player.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
    cardManager.grid.SetActive(false);
                 Log("Card grid deactivated");
   }
+            
+            // Pause timer for players who are not on their turn
+            Timer timer = FindObjectOfType<Timer>();
+            if (timer != null)
+            {
+                timer.PauseTimer();
+                Log("Timer paused - not my turn");
+            }
         }
     
         Log($"========== TURN CHANGE COMPLETE ==========");
@@ -805,13 +816,45 @@ Log($"RPC_SyncCardCounter - Setting counter to {newCounter}");
     
     #region Timer Synchronization
     
+    /// <summary>
+    /// Start timer only for the player whose turn it is
+    /// </summary>
+    public void StartTimerForCurrentPlayer()
+    {
+        if (PhotonNetwork.IsMasterClient)
+        {
+            Player currentPlayer = turnSystem?.GetCurrentTurnPlayer();
+            if (currentPlayer != null)
+            {
+                Log($"Starting timer for {currentPlayer.NickName}'s turn");
+                photonView.RPC("RPC_StartTimerForPlayer", RpcTarget.All, currentPlayer.ActorNumber);
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Start timer for all players (used when starting new enemy)
+    /// </summary>
     public void StartTimerForAllPlayers()
     {
         if (PhotonNetwork.IsMasterClient)
         {
-        photonView.RPC("RPC_StartTimer", RpcTarget.All);
+            Log("Starting timer for all players (new enemy)");
+            photonView.RPC("RPC_StartTimer", RpcTarget.All);
         }
- }
+    }
+    
+    /// <summary>
+    /// Stop timer for all players
+    /// </summary>
+    public void StopTimerForAllPlayers()
+    {
+        if (PhotonNetwork.IsMasterClient)
+        {
+            Log("Stopping timer for all players");
+            photonView.RPC("RPC_StopTimer", RpcTarget.All);
+        }
+    }
     
     [PunRPC]
     void RPC_StartTimer()
@@ -826,6 +869,47 @@ Log($"RPC_SyncCardCounter - Setting counter to {newCounter}");
         else
  {
          LogWarning("Timer not found in scene!");
+        }
+    }
+    
+    [PunRPC]
+    void RPC_StartTimerForPlayer(int playerActorNumber)
+    {
+        bool isMyTurn = (playerActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
+        
+        Timer timer = FindObjectOfType<Timer>();
+        if (timer != null)
+        {
+            if (isMyTurn)
+            {
+                timer.ResetTimer();
+                timer.StartTimer();
+                Log($"Timer started for my turn (ActorNumber: {playerActorNumber})");
+            }
+            else
+            {
+                timer.PauseTimer();
+                Log($"Timer paused - not my turn (ActorNumber: {playerActorNumber})");
+            }
+        }
+        else
+        {
+            LogWarning("Timer not found in scene!");
+        }
+    }
+    
+    [PunRPC]
+    void RPC_StopTimer()
+    {
+        Timer timer = FindObjectOfType<Timer>();
+        if (timer != null)
+        {
+            timer.PauseTimer();
+            Log("Timer paused for all players");
+        }
+        else
+        {
+            LogWarning("Timer not found in scene!");
         }
     }
     
@@ -905,6 +989,16 @@ Log($"RPC_SyncCardCounter - Setting counter to {newCounter}");
       Log("No animation - enemy damaged immediately");
     }
    }
+        
+        // Sync correct answer to all players
+        // Get the answer index from the current counter before it was incremented
+        if (playCardButton != null && playCardButton.outputManager != null)
+        {
+            int outputIndex = playCardButton.outputManager.counter;
+            // The answer index should be passed from PlayCardButton, but we'll use counter as fallback
+            // This will be synced via SyncCardState which is called from PlayCardButton
+            Log($"Correct answer played - will sync answer list for output {outputIndex}");
+        }
         
         // NOTE: Turn advancement for correct answers is handled in RPC_SyncEnemyHealth
         // This ensures the turn advances whether the enemy dies or survives
@@ -1126,6 +1220,60 @@ playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
         }
     }
     
+    /// <summary>
+    /// Sync correct answer to all players when a player gets it right
+    /// </summary>
+    public void SyncCorrectAnswerToAll(int outputIndex, int answerIndex)
+    {
+        if (PhotonNetwork.IsMasterClient)
+        {
+            Log($"Syncing correct answer to all players - Output: {outputIndex}, Answer: {answerIndex}");
+            photonView.RPC("RPC_SyncCorrectAnswer", RpcTarget.All, outputIndex, answerIndex);
+        }
+    }
+    
+    [PunRPC]
+    void RPC_SyncCorrectAnswer(int outputIndex, int answerIndex)
+    {
+        Log($"RPC_SyncCorrectAnswer received - Output: {outputIndex}, Answer: {answerIndex}");
+        
+        if (playCardButton != null && playCardButton.outputManager != null)
+        {
+            // Ensure output index is valid
+            if (outputIndex >= 0 && outputIndex < playCardButton.outputManager.answerListContainer.Count)
+            {
+                var answerContainer = playCardButton.outputManager.answerListContainer[outputIndex];
+                
+                // Ensure answer index is valid
+                if (answerIndex >= 0 && answerIndex < answerContainer.answers.Count)
+                {
+                    var answerObject = answerContainer.answers[answerIndex];
+                    if (answerObject != null)
+                    {
+                        answerObject.SetActive(true);
+                        Log($"Correct answer activated for all players - Output: {outputIndex}, Answer: {answerIndex}");
+                    }
+                    else
+                    {
+                        LogWarning($"Answer object is null at Output: {outputIndex}, Answer: {answerIndex}");
+                    }
+                }
+                else
+                {
+                    LogWarning($"Answer index {answerIndex} out of range for output {outputIndex} (max: {answerContainer.answers.Count - 1})");
+                }
+            }
+            else
+            {
+                LogWarning($"Output index {outputIndex} out of range (max: {playCardButton.outputManager.answerListContainer.Count - 1})");
+            }
+        }
+        else
+        {
+            LogError("PlayCardButton or OutputManager is null - cannot sync answer!");
+        }
+    }
+    
   public void SyncCardState(int cardCounter, int playButtonCounter, int outputCounter, int answerIndex)
     {
         photonView.RPC("RPC_SyncCardState", RpcTarget.All, cardCounter, playButtonCounter, outputCounter, answerIndex);
@@ -1140,7 +1288,22 @@ playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
       if (playCardButton != null) playCardButton.counter = playButtonCounter;
         if (playCardButton != null && playCardButton.outputManager != null) playCardButton.outputManager.counter = outputCounter;
    
-    SyncCorrectAnswerUI(0, answerIndex);
+    // Sync correct answer to all players (answer index is already synced via RPC_SyncCorrectAnswer)
+        // The answer list update is handled separately via RPC_SyncCorrectAnswer which is called from SyncCorrectAnswerToAll
+        if (answerIndex >= 0 && playCardButton != null && playCardButton.outputManager != null)
+        {
+            // Directly update the answer UI for all clients
+            if (outputCounter >= 0 && outputCounter < playCardButton.outputManager.answerListContainer.Count &&
+                answerIndex >= 0 && answerIndex < playCardButton.outputManager.answerListContainer[outputCounter].answers.Count)
+            {
+                var answerObject = playCardButton.outputManager.answerListContainer[outputCounter].answers[answerIndex];
+                if (answerObject != null)
+                {
+                    answerObject.SetActive(true);
+                    Log($"Answer list updated - Output: {outputCounter}, Answer: {answerIndex}");
+                }
+            }
+        }
     }
     
     public void OnEnemyDefeated()
