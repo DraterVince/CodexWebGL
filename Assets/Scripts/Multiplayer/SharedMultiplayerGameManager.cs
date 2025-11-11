@@ -720,11 +720,16 @@ bool isMyTurn = (player.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
     {
         Log($"===== RPC_SyncAllCounters RECEIVED =====");
         Log($"Setting ALL counters: CardManager={cardCounter}, PlayButton={playButtonCounter}, Output={outputCounter}");
+        Log($"Local Player: {PhotonNetwork.LocalPlayer?.NickName} (ActorNumber: {PhotonNetwork.LocalPlayer?.ActorNumber})");
         
         if (cardManager != null)
         {
             cardManager.counter = cardCounter;
             Log($"✓ CardManager.counter = {cardCounter}");
+        }
+        else
+        {
+            LogError("CardManager is NULL!");
         }
         
         if (playCardButton != null)
@@ -732,36 +737,69 @@ bool isMyTurn = (player.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
             playCardButton.counter = playButtonCounter;
             Log($"✓ PlayButton.counter = {playButtonCounter}");
         }
+        else
+        {
+            LogError("PlayCardButton is NULL!");
+        }
         
         if (playCardButton != null && playCardButton.outputManager != null)
         {
             playCardButton.outputManager.counter = outputCounter;
             Log($"✓ OutputManager.counter = {outputCounter}");
         }
+        else
+        {
+            LogError("OutputManager is NULL!");
+        }
         
         Log("===== ALL COUNTERS SYNCED =====");
         
         // CRITICAL FIX: After counters are synced, if it's my turn, reset and randomize cards
         // This ensures cards are randomized with the CORRECT counter values
-        if (turnSystem != null)
+        if (turnSystem == null)
         {
-            Player currentTurnPlayer = turnSystem.GetCurrentTurnPlayer();
-            bool isMyTurn = (currentTurnPlayer != null && currentTurnPlayer.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
-            
-            Log($"Checking if should randomize cards: isMyTurn={isMyTurn}");
-            
-            if (isMyTurn && cardManager != null && cardManager.grid != null)
+            LogError("CRITICAL: turnSystem is NULL! Cannot check whose turn it is. Re-fetching...");
+            turnSystem = GetComponent<CodexMultiplayerIntegration>();
+            if (turnSystem == null)
             {
-                Log($"✓ It's my turn! Resetting and randomizing cards with counter={cardManager.counter}");
-                
-                // Reset cards back to grid (using newly-synced cardManager.counter)
-                cardManager.ResetCards();
-                Log($"Cards reset for question {cardManager.counter}");
-                
-                // Randomize cards for the current question
-                cardManager.StartCoroutine(cardManager.Randomize());
-                Log($"Started randomizing cards for question {cardManager.counter}");
+                LogError("FATAL: CodexMultiplayerIntegration component not found!");
+                return;
             }
+        }
+        
+        Player currentTurnPlayer = turnSystem.GetCurrentTurnPlayer();
+        Log($"Current turn player: {currentTurnPlayer?.NickName} (ActorNumber: {currentTurnPlayer?.ActorNumber})");
+        
+        bool isMyTurn = (currentTurnPlayer != null && currentTurnPlayer.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
+        Log($"Checking if should randomize cards: isMyTurn={isMyTurn}");
+        
+        if (isMyTurn)
+        {
+            if (cardManager == null)
+            {
+                LogError("Cannot randomize cards - CardManager is NULL!");
+                return;
+            }
+            
+            if (cardManager.grid == null)
+            {
+                LogError("Cannot randomize cards - CardManager.grid is NULL!");
+                return;
+            }
+            
+            Log($"✓ It's my turn! Resetting and randomizing cards with counter={cardManager.counter}");
+            
+            // Reset cards back to grid (using newly-synced cardManager.counter)
+            cardManager.ResetCards();
+            Log($"Cards reset for question {cardManager.counter}");
+            
+            // Randomize cards for the current question
+            cardManager.StartCoroutine(cardManager.Randomize());
+            Log($"Started randomizing cards for question {cardManager.counter}");
+        }
+        else
+        {
+            Log($"Not my turn - skipping card randomization");
         }
     }
     
@@ -1050,6 +1088,7 @@ Log($"RPC_SyncCardCounter - Setting counter to {newCounter}");
             Log($"Correct answer played - will sync answer list for output {outputIndex}");
         }
         
+        Log($"===== CORRECT ANSWER: RPC_SyncEnemyHealth will handle turn advancement =====");
         // NOTE: Turn advancement for correct answers is handled in RPC_SyncEnemyHealth
         // This ensures the turn advances whether the enemy dies or survives
  }
@@ -1092,12 +1131,14 @@ DamageSharedHealth(1f);
   }
     
    Log("Wrong answer - damaging shared health and advancing turn after delay");
+         Log($"===== WRONG ANSWER: Starting turn advancement coroutine =====");
          
          // Force card reset for all players before advancing turn
          photonView.RPC("RPC_ForceCardReset", RpcTarget.All);
          
          // Advance turn after delay to allow animation to complete
          StartCoroutine(AdvanceTurnAfterDelay(1.0f));
+         Log($"===== WRONG ANSWER: AdvanceTurnAfterDelay coroutine started =====");
     }
   else
         {

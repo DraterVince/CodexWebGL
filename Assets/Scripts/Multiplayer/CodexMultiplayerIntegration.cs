@@ -28,6 +28,9 @@ public class CodexMultiplayerIntegration : MonoBehaviourPunCallbacks
     
     // CRITICAL: Prevent multiple timeout calls
     private bool hasTimedOut = false;
+    
+    // Prevent log spam from GetCurrentTurnPlayer() called every frame
+    private bool hasLoggedMissingTurnProperty = false;
 
  // Events for turn changes
     public System.Action<Player> OnTurnChanged;
@@ -133,7 +136,7 @@ public class CodexMultiplayerIntegration : MonoBehaviourPunCallbacks
     {
         if (!PhotonNetwork.InRoom)
         {
-     Debug.LogWarning("[CodexMultiplayerIntegration] Not in room - cannot get turn player");
+            // Don't log warning every frame - this is called in Update()
             return null;
         }
 
@@ -141,12 +144,12 @@ public class CodexMultiplayerIntegration : MonoBehaviourPunCallbacks
         if (PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue("CurrentTurn", out currentTurnObj))
      {
     int turnIndex = (int)currentTurnObj;
-       Debug.Log($"[CodexMultiplayerIntegration] Current turn index: {turnIndex}, Player count: {PhotonNetwork.PlayerList.Length}");
+       // Don't log every frame - this is called in Update()
     
  if (turnIndex >= 0 && turnIndex < PhotonNetwork.PlayerList.Length)
       {
            Player currentPlayer = PhotonNetwork.PlayerList[turnIndex];
-       Debug.Log($"[CodexMultiplayerIntegration] Current turn player: {currentPlayer.NickName}");
+       // Don't log every frame - this is called in Update()
       return currentPlayer;
           }
             else
@@ -156,7 +159,12 @@ public class CodexMultiplayerIntegration : MonoBehaviourPunCallbacks
         }
 else
    {
-   Debug.LogWarning("[CodexMultiplayerIntegration] 'CurrentTurn' property not found in room! Turn system may not be initialized.");
+   // Only log once on initialization failure, not every frame
+   if (!hasLoggedMissingTurnProperty)
+   {
+       Debug.LogWarning("[CodexMultiplayerIntegration] 'CurrentTurn' property not found in room! Turn system may not be initialized.");
+       hasLoggedMissingTurnProperty = true;
+   }
         }
 
         return null;
