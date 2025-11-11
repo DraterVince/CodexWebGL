@@ -284,7 +284,13 @@ else
  // CRITICAL FIX: Reset timeout flag when turn changes
         hasTimedOut = false;
         
-    Player currentPlayer = GetCurrentTurnPlayer();
+    // CRITICAL FIX: Get player directly from array using turnIndex parameter
+        // Don't use GetCurrentTurnPlayer() which reads from room properties (race condition!)
+        Player currentPlayer = null;
+        if (turnIndex >= 0 && turnIndex < PhotonNetwork.PlayerList.Length)
+        {
+            currentPlayer = PhotonNetwork.PlayerList[turnIndex];
+        }
         
 if (currentPlayer != null)
         {
@@ -296,7 +302,7 @@ if (currentPlayer != null)
  else
         {
       Debug.LogError($"[CodexMultiplayerIntegration] ERROR: Could not get current turn player for index {turnIndex}!");
-     }
+        }
     }
 
     /// <summary>
