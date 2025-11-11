@@ -57,6 +57,14 @@ public class CardManager : MonoBehaviour
         }
     }
     
+    /// <summary>
+    /// Start randomization and track the coroutine (for multiplayer)
+    /// </summary>
+    public void StartRandomization()
+    {
+        currentRandomizeCoroutine = StartCoroutine(Randomize());
+    }
+    
     public IEnumerator Randomize()
     {
         // Prevent multiple simultaneous randomizations

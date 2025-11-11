@@ -664,13 +664,9 @@ bool isMyTurn = (player.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
                 Log("Card grid deactivated");
   }
             
-            // Pause timer for players who are not on their turn
-            Timer timer = FindObjectOfType<Timer>();
-            if (timer != null)
-            {
-                timer.PauseTimer();
-                Log("Timer paused - not my turn");
-            }
+            // **NOTE: Timer keeps running for all players**
+            // Don't pause it - all players need to see the same countdown
+            Log("Watching other player's turn - timer still running");
         }
     
         Log($"========== TURN CHANGE COMPLETE ==========");
@@ -805,7 +801,7 @@ bool isMyTurn = (player.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
             Log($"Cards reset for question {cardManager.counter}");
             
             // Randomize cards for the current question
-            cardManager.StartCoroutine(cardManager.Randomize());
+            cardManager.StartRandomization();
             Log($"Started randomizing cards for question {cardManager.counter}");
         }
         else
@@ -979,16 +975,18 @@ Log($"RPC_SyncCardCounter - Setting counter to {newCounter}");
         Timer timer = FindObjectOfType<Timer>();
         if (timer != null)
         {
+            // **CRITICAL: Timer should run for ALL players, not just the active one**
+            // This ensures perfect sync across all clients
+            timer.ResetTimer();
+            timer.StartTimer();
+            
             if (isMyTurn)
             {
-                timer.ResetTimer();
-                timer.StartTimer();
                 Log($"Timer started for my turn (ActorNumber: {playerActorNumber})");
             }
             else
             {
-                timer.PauseTimer();
-                Log($"Timer paused - not my turn (ActorNumber: {playerActorNumber})");
+                Log($"Timer running - watching {playerActorNumber}'s turn");
             }
         }
         else
