@@ -176,6 +176,8 @@ public class NetworkManager : MonoBehaviourPunCallbacks
     {
         if (PhotonNetwork.IsConnected)
         {
+            // Log stack trace to see what's calling this
+            Debug.LogWarning($"[NetworkManager] Disconnect() called! In room: {PhotonNetwork.InRoom}. Stack trace:\n{System.Environment.StackTrace}");
             PhotonNetwork.Disconnect();
             Debug.Log("[NetworkManager] Disconnecting from Photon...");
         }
@@ -240,6 +242,8 @@ public class NetworkManager : MonoBehaviourPunCallbacks
     {
         if (PhotonNetwork.InRoom)
         {
+            // Log stack trace to see what's calling this
+            Debug.LogWarning($"[NetworkManager] LeaveRoom() called! Stack trace:\n{System.Environment.StackTrace}");
             PhotonNetwork.LeaveRoom();
             Debug.Log("Leaving room...");
         }

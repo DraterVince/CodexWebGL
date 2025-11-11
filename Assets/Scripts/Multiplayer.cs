@@ -39,6 +39,9 @@ public class MultiplayerSceneLoader : MonoBehaviour
     /// </summary>
     public void ReturnToMainMenu()
     {
+        // Log stack trace to see what's calling this
+        Debug.LogWarning($"[MultiplayerSceneLoader] ReturnToMainMenu() called! Stack trace:\n{System.Environment.StackTrace}");
+        
         // Disconnect from Photon if connected
         if (NetworkManager.Instance != null)
         {

@@ -134,48 +134,74 @@ SetupButtons();
 
     private void SetupButtons()
     {
+        // Clear all existing listeners first to prevent duplicates
         if (connectButton != null)
+        {
+            connectButton.onClick.RemoveAllListeners();
             connectButton.onClick.AddListener(OnConnectButtonClicked);
+        }
 
         if (createRoomButton != null)
-  createRoomButton.onClick.AddListener(OnCreateRoomButtonClicked);
+        {
+            createRoomButton.onClick.RemoveAllListeners();
+            createRoomButton.onClick.AddListener(OnCreateRoomButtonClicked);
+        }
 
         if (joinRoomButton != null)
-  joinRoomButton.onClick.AddListener(OnJoinRoomButtonClicked);
+        {
+            joinRoomButton.onClick.RemoveAllListeners();
+            joinRoomButton.onClick.AddListener(OnJoinRoomButtonClicked);
+        }
 
         if (startGameButton != null)
+        {
+            startGameButton.onClick.RemoveAllListeners();
             startGameButton.onClick.AddListener(OnStartGameButtonClicked);
+        }
 
-      if (leaveRoomButton != null)
+        if (leaveRoomButton != null)
+        {
+            leaveRoomButton.onClick.RemoveAllListeners();
             leaveRoomButton.onClick.AddListener(OnLeaveRoomButtonClicked);
+        }
         
-    // NEW: Ready button
-     if (readyButton != null)
-         readyButton.onClick.AddListener(OnReadyButtonClicked);
+        // Ready button
+        if (readyButton != null)
+        {
+            readyButton.onClick.RemoveAllListeners();
+            readyButton.onClick.AddListener(OnReadyButtonClicked);
+        }
         
-     // NEW: Kick confirmation buttons
+        // Kick confirmation buttons
         if (confirmKickButton != null)
-        confirmKickButton.onClick.AddListener(OnConfirmKickClicked);
+        {
+            confirmKickButton.onClick.RemoveAllListeners();
+            confirmKickButton.onClick.AddListener(OnConfirmKickClicked);
+        }
   
         if (cancelKickButton != null)
-    cancelKickButton.onClick.AddListener(OnCancelKickClicked);
+        {
+            cancelKickButton.onClick.RemoveAllListeners();
+            cancelKickButton.onClick.AddListener(OnCancelKickClicked);
+        }
         
-        // NEW: Setup kick buttons for each player slot
+        // Setup kick buttons for each player slot
         if (playerKickButtons != null)
         {
             for (int i = 0; i < playerKickButtons.Length; i++)
-{
-            int index = i; // Capture for lambda
-    if (playerKickButtons[i] != null)
-    {
-   playerKickButtons[i].onClick.AddListener(() => OnKickButtonClicked(index));
-        }
-        }
+            {
+                int index = i; // Capture for lambda
+                if (playerKickButtons[i] != null)
+                {
+                    playerKickButtons[i].onClick.RemoveAllListeners();
+                    playerKickButtons[i].onClick.AddListener(() => OnKickButtonClicked(index));
+                }
+            }
         }
         
         // Hide kick confirmation panel initially
-    if (kickConfirmationPanel != null)
-    kickConfirmationPanel.SetActive(false);
+        if (kickConfirmationPanel != null)
+            kickConfirmationPanel.SetActive(false);
     }
 
     #endregion
@@ -602,7 +628,7 @@ NetworkManager.Instance.LeaveRoom();
             // Get assigned cosmetic for this position
  string assignedCosmetic = GetCosmeticForPosition(i);
      
-         playerList += $"• {player.NickName}";
+         playerList += $"ï¿½ {player.NickName}";
  
        if (player.IsMasterClient)
          playerList += " [HOST]";
