@@ -265,6 +265,11 @@ else
    Debug.Log($"[CodexMultiplayerIntegration] ===== RPC_TurnChanged RECEIVED =====");
         Debug.Log($"[CodexMultiplayerIntegration] Turn index: {turnIndex}");
         Debug.Log($"[CodexMultiplayerIntegration] Player list length: {PhotonNetwork.PlayerList.Length}");
+        Debug.Log($"[CodexMultiplayerIntegration] Players in room:");
+        for (int i = 0; i < PhotonNetwork.PlayerList.Length; i++)
+        {
+            Debug.Log($"  [{i}] {PhotonNetwork.PlayerList[i].NickName} (ActorNumber: {PhotonNetwork.PlayerList[i].ActorNumber})");
+        }
     
         currentPlayerTurn = turnIndex;
         
@@ -275,7 +280,7 @@ else
         
 if (currentPlayer != null)
         {
-     Debug.Log($"[CodexMultiplayerIntegration] Turn changed to: {currentPlayer.NickName} (IsLocal: {currentPlayer.IsLocal})");
+     Debug.Log($"[CodexMultiplayerIntegration] Turn changed to: {currentPlayer.NickName} (IsLocal: {currentPlayer.IsLocal}, ActorNumber: {currentPlayer.ActorNumber})");
             Debug.Log($"[CodexMultiplayerIntegration] Invoking OnTurnChanged event...");
    OnTurnChanged?.Invoke(currentPlayer);
        Debug.Log($"[CodexMultiplayerIntegration] OnTurnChanged event invoked successfully");

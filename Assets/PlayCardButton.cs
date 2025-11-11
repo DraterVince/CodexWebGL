@@ -194,20 +194,36 @@ public class PlayCardButton : MonoBehaviour
        delayHealthUIUpdate = true;
 
     playerJumpAttack.PerformJumpAttack(currentEnemy.transform, () => {
-        EnemyTakeDamage(1);
-     outputManager.answerListContainer[outputManager.counter].answers[currentAnswerIndex].SetActive(true);
-   UpdateEnemyHealthUI();
-     delayHealthUIUpdate = false;
-     
-  CheckEnemyDefeat(currentAnswerIndex);
+        if (!isMultiplayerMode)
+        {
+            EnemyTakeDamage(1);
+            outputManager.answerListContainer[outputManager.counter].answers[currentAnswerIndex].SetActive(true);
+            UpdateEnemyHealthUI();
+            delayHealthUIUpdate = false;
+            CheckEnemyDefeat(currentAnswerIndex);
+        }
+        else
+        {
+            // In multiplayer, just update UI locally - server handles damage/logic
+            outputManager.answerListContainer[outputManager.counter].answers[currentAnswerIndex].SetActive(true);
+            delayHealthUIUpdate = false;
+        }
        });
     }
         else
     {
-         EnemyTakeDamage(1);
-       outputManager.answerListContainer[outputManager.counter].answers[currentAnswerIndex].SetActive(true);
-           UpdateEnemyHealthUI();
-        CheckEnemyDefeat(currentAnswerIndex);
+        if (!isMultiplayerMode)
+        {
+            EnemyTakeDamage(1);
+            outputManager.answerListContainer[outputManager.counter].answers[currentAnswerIndex].SetActive(true);
+            UpdateEnemyHealthUI();
+            CheckEnemyDefeat(currentAnswerIndex);
+        }
+        else
+        {
+            // In multiplayer, just update UI locally - server handles damage/logic
+            outputManager.answerListContainer[outputManager.counter].answers[currentAnswerIndex].SetActive(true);
+        }
    }
    }
          else

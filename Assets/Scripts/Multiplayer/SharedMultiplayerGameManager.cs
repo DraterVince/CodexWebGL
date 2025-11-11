@@ -1282,26 +1282,59 @@ playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
     [PunRPC]
     void RPC_SyncCardState(int cardCounter, int playButtonCounter, int outputCounter, int answerIndex)
     {
-      Log($"Syncing card state - Card: {cardCounter}, PlayButton: {playButtonCounter}, Output: {outputCounter}, Answer: {answerIndex}");
+      Log($"===== RPC_SyncCardState =====");
+      Log($"Card Counter: {cardCounter}, PlayButton Counter: {playButtonCounter}, Output Counter: {outputCounter}, Answer Index: {answerIndex}");
      
-   if (cardManager != null) cardManager.counter = cardCounter;
-      if (playCardButton != null) playCardButton.counter = playButtonCounter;
-        if (playCardButton != null && playCardButton.outputManager != null) playCardButton.outputManager.counter = outputCounter;
+   if (cardManager != null) 
+   {
+       cardManager.counter = cardCounter;
+       Log($"CardManager counter set to: {cardCounter}");
+   }
    
-    // Sync correct answer to all players (answer index is already synced via RPC_SyncCorrectAnswer)
-        // The answer list update is handled separately via RPC_SyncCorrectAnswer which is called from SyncCorrectAnswerToAll
+   if (playCardButton != null) 
+   {
+       playCardButton.counter = playButtonCounter;
+       Log($"PlayButton counter set to: {playButtonCounter}");
+   }
+   
+   if (playCardButton != null && playCardButton.outputManager != null) 
+   {
+       playCardButton.outputManager.counter = outputCounter;
+       Log($"OutputManager counter set to: {outputCounter}");
+   }
+   
+    // Activate the correct answer in the UI
         if (answerIndex >= 0 && playCardButton != null && playCardButton.outputManager != null)
         {
-            // Directly update the answer UI for all clients
-            if (outputCounter >= 0 && outputCounter < playCardButton.outputManager.answerListContainer.Count &&
-                answerIndex >= 0 && answerIndex < playCardButton.outputManager.answerListContainer[outputCounter].answers.Count)
+            Log($"Attempting to activate answer - Output: {outputCounter}, Answer: {answerIndex}");
+            Log($"Answer list container count: {playCardButton.outputManager.answerListContainer.Count}");
+            
+            if (outputCounter >= 0 && outputCounter < playCardButton.outputManager.answerListContainer.Count)
             {
-                var answerObject = playCardButton.outputManager.answerListContainer[outputCounter].answers[answerIndex];
-                if (answerObject != null)
+                int answersCount = playCardButton.outputManager.answerListContainer[outputCounter].answers.Count;
+                Log($"Answers available for output {outputCounter}: {answersCount}");
+                
+                if (answerIndex >= 0 && answerIndex < answersCount)
                 {
-                    answerObject.SetActive(true);
-                    Log($"Answer list updated - Output: {outputCounter}, Answer: {answerIndex}");
+                    var answerObject = playCardButton.outputManager.answerListContainer[outputCounter].answers[answerIndex];
+                    if (answerObject != null)
+                    {
+                        answerObject.SetActive(true);
+                        Log($"✓ Answer activated successfully! Output: {outputCounter}, Answer: {answerIndex}");
+                    }
+                    else
+                    {
+                        LogError($"Answer object is NULL at Output: {outputCounter}, Answer: {answerIndex}");
+                    }
                 }
+                else
+                {
+                    LogError($"Answer index {answerIndex} out of range for {answersCount} answers");
+                }
+            }
+            else
+            {
+                LogError($"Output counter {outputCounter} out of range for {playCardButton.outputManager.answerListContainer.Count} outputs");
             }
         }
     }
