@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Photon.Pun;
 
 public class MultiplayerSceneLoader : MonoBehaviour
 {
@@ -15,7 +16,22 @@ public class MultiplayerSceneLoader : MonoBehaviour
     public void LoadMultiplayerLobby()
     {
         Debug.Log("Loading Multiplayer Lobby...");
-        SceneManager.LoadSceneAsync(multiplayerLobbyScene);
+        
+        if (PhotonNetwork.IsConnectedAndReady && PhotonNetwork.InRoom)
+        {
+            if (PhotonNetwork.IsMasterClient)
+            {
+                PhotonNetwork.LoadLevel(multiplayerLobbyScene);
+            }
+            else
+            {
+                Debug.LogWarning("[MultiplayerSceneLoader] Only the Master Client can change scenes while in a room.");
+            }
+        }
+        else
+        {
+            SceneManager.LoadSceneAsync(multiplayerLobbyScene);
+        }
     }
 
     /// <summary>

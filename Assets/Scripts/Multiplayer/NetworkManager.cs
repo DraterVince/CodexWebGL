@@ -63,6 +63,40 @@ public class NetworkManager : MonoBehaviourPunCallbacks
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         CheckAndConnectIfNeeded();
+
+        // Ensure scene stays in sync with Master Client when already in a Photon room
+        if (PhotonNetwork.InRoom && PhotonNetwork.AutomaticallySyncScene && !PhotonNetwork.IsMasterClient)
+        {
+            if (PhotonNetwork.CurrentRoom != null &&
+                PhotonNetwork.CurrentRoom.CustomProperties != null &&
+                PhotonNetwork.CurrentRoom.CustomProperties.TryGetValue("curScn", out object sceneId))
+            {
+                bool isMatchingScene = false;
+
+                if (sceneId is string sceneName)
+                {
+                    isMatchingScene = string.Equals(sceneName, scene.name);
+                }
+                else if (sceneId is int sceneIndex)
+                {
+                    isMatchingScene = sceneIndex == scene.buildIndex;
+                }
+
+                if (!isMatchingScene)
+                {
+                    Debug.LogWarning($"[NetworkManager] Scene mismatch detected (local: {scene.name}). Resyncing to master scene: {sceneId}");
+
+                    if (sceneId is string targetSceneName)
+                    {
+                        SceneManager.LoadScene(targetSceneName);
+                    }
+                    else if (sceneId is int targetSceneIndex)
+                    {
+                        SceneManager.LoadScene(targetSceneIndex);
+                    }
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -254,13 +288,6 @@ public class NetworkManager : MonoBehaviourPunCallbacks
         Debug.LogError($"? Failed to create room: {message}");
     }
 
-    public override void OnJoinedRoom()
-    {
-        Debug.Log($"? Joined Room: {PhotonNetwork.CurrentRoom.Name}");
-        Debug.Log($"Players in room: {PhotonNetwork.CurrentRoom.PlayerCount}/{PhotonNetwork.CurrentRoom.MaxPlayers}");
-        CurrentRoomName = PhotonNetwork.CurrentRoom.Name;
-    }
-
     public override void OnJoinRoomFailed(short returnCode, string message)
     {
         Debug.LogError($"? Failed to join room: {message}");
@@ -272,16 +299,6 @@ public class NetworkManager : MonoBehaviourPunCallbacks
         CurrentRoomName = "";
     }
 
-    public override void OnPlayerEnteredRoom(Player newPlayer)
-    {
-        Debug.Log($"Player joined: {newPlayer.NickName} (Total: {PhotonNetwork.CurrentRoom.PlayerCount})");
-    }
-
-    public override void OnPlayerLeftRoom(Player otherPlayer)
-    {
-        Debug.Log($"Player left: {otherPlayer.NickName} (Total: {PhotonNetwork.CurrentRoom.PlayerCount})");
-    }
-
     public override void OnMasterClientSwitched(Player newMasterClient)
     {
         Debug.Log($"New Master Client: {newMasterClient.NickName}");
@@ -290,7 +307,14 @@ public class NetworkManager : MonoBehaviourPunCallbacks
     public override void OnJoinedRoom()
     {
         base.OnJoinedRoom();
-        
+
+        if (PhotonNetwork.CurrentRoom != null)
+        {
+            CurrentRoomName = PhotonNetwork.CurrentRoom.Name;
+            Debug.Log($"? Joined Room: {CurrentRoomName}");
+            Debug.Log($"Players in room: {PhotonNetwork.CurrentRoom.PlayerCount}/{PhotonNetwork.CurrentRoom.MaxPlayers}");
+        }
+
         // If Master Client, ensure scene is synced
         if (PhotonNetwork.IsMasterClient && PhotonNetwork.AutomaticallySyncScene)
         {
@@ -304,13 +328,19 @@ public class NetworkManager : MonoBehaviourPunCallbacks
     {
         base.OnPlayerEnteredRoom(newPlayer);
         Debug.Log($"Player joined: {newPlayer.NickName} (Total: {PhotonNetwork.CurrentRoom.PlayerCount})");
-        
+
         // If we're Master Client and new player joins, ensure they get the current scene
         if (PhotonNetwork.IsMasterClient && PhotonNetwork.AutomaticallySyncScene)
         {
             string currentScene = SceneManager.GetActiveScene().name;
             Debug.Log($"[NetworkManager] New player joined - current scene is: {currentScene}");
         }
+    }
+
+    public override void OnPlayerLeftRoom(Player otherPlayer)
+    {
+        base.OnPlayerLeftRoom(otherPlayer);
+        Debug.Log($"Player left: {otherPlayer.NickName} (Total: {PhotonNetwork.CurrentRoom?.PlayerCount ?? 0})");
     }
 
     public void SetPlayerNickname(string nickname)

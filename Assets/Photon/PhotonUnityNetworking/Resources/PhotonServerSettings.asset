@@ -63,6 +63,9 @@ MonoBehaviour:
   - RPC_SyncEnemyHealth
   - RPC_ForceCardReset
   - RPC_SyncCardCounter
+  - RPC_StartTimerForPlayer
+  - RPC_StopTimer
+  - RPC_SyncCorrectAnswer
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 1

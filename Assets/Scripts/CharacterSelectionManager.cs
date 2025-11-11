@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Photon.Pun;
 
 /// <summary>
 /// Manages character selection flow between scenes
@@ -152,7 +153,7 @@ public class CharacterSelectionManager : MonoBehaviour
         }
         else
         {
-         SceneManager.LoadScene(levelSceneName);
+         LoadSceneMultiplayerAware(levelSceneName);
         }
     }
     
@@ -172,7 +173,7 @@ public class CharacterSelectionManager : MonoBehaviour
    else
         {
     // Load separate character selection scene
-            SceneManager.LoadScene(characterSelectionSceneName);
+            LoadSceneMultiplayerAware(characterSelectionSceneName);
      }
     }
     
@@ -209,14 +210,14 @@ public class CharacterSelectionManager : MonoBehaviour
         {
           string levelName = PlayerPrefs.GetString("NextLevelName");
     PlayerPrefs.DeleteKey("NextLevelName");
-    SceneManager.LoadScene(levelName);
+    LoadSceneMultiplayerAware(levelName);
             return;
         }
         
         // Otherwise use scene index
         if (selectedLevelIndex >= 0)
   {
-    SceneManager.LoadScene(selectedLevelIndex);
+    LoadSceneMultiplayerAware(selectedLevelIndex);
         }
       else
      {
@@ -230,5 +231,49 @@ public class CharacterSelectionManager : MonoBehaviour
     public void OpenCharacterSelectionFromButton()
     {
         OpenCharacterSelection();
+    }
+
+    /// <summary>
+    /// Load a scene by name, respecting Photon multiplayer sync
+    /// </summary>
+    private void LoadSceneMultiplayerAware(string sceneName)
+    {
+        if (PhotonNetwork.IsConnectedAndReady && PhotonNetwork.InRoom && PhotonNetwork.AutomaticallySyncScene)
+        {
+            if (PhotonNetwork.IsMasterClient)
+            {
+                PhotonNetwork.LoadLevel(sceneName);
+            }
+            else
+            {
+                Debug.LogWarning($"[CharacterSelectionManager] Only the Master Client can load scenes in multiplayer. Waiting for host to load '{sceneName}'.");
+            }
+        }
+        else
+        {
+            SceneManager.LoadScene(sceneName);
+        }
+    }
+
+    /// <summary>
+    /// Load a scene by build index, respecting Photon multiplayer sync
+    /// </summary>
+    private void LoadSceneMultiplayerAware(int sceneIndex)
+    {
+        if (PhotonNetwork.IsConnectedAndReady && PhotonNetwork.InRoom && PhotonNetwork.AutomaticallySyncScene)
+        {
+            if (PhotonNetwork.IsMasterClient)
+            {
+                PhotonNetwork.LoadLevel(sceneIndex);
+            }
+            else
+            {
+                Debug.LogWarning($"[CharacterSelectionManager] Only the Master Client can load scenes in multiplayer. Waiting for host to load scene index {sceneIndex}.");
+            }
+        }
+        else
+        {
+            SceneManager.LoadScene(sceneIndex);
+        }
     }
 }
