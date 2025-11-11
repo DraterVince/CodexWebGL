@@ -626,6 +626,28 @@ bool isMyTurn = (player.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
     {
   cardManager.grid.SetActive(true);
               Log("Card grid activated");
+              
+              // CRITICAL FIX: Ensure cards are visible by calling ResetCards
+              // This ensures cards are properly positioned in the grid
+              Log("Ensuring cards are visible for new turn");
+              cardManager.ResetCards();
+              
+              // Force a card randomization for the current question
+              if (playCardButton != null && playCardButton.outputManager != null)
+              {
+                  int currentQuestion = playCardButton.outputManager.counter;
+                  Log($"Current question: {currentQuestion}, Card counter: {cardManager.counter}");
+                  
+                  // Make sure card counter matches the question
+                  if (cardManager.counter != currentQuestion && currentQuestion >= 0 && currentQuestion < cardManager.cardContainer.Count)
+                  {
+                      cardManager.counter = currentQuestion;
+                      Log($"Corrected card counter to {currentQuestion}");
+                  }
+              }
+              
+              cardManager.StartCoroutine(cardManager.Randomize());
+              Log("Cards randomized for current player's turn");
      }
             
             // Start timer only for the player whose turn it is
@@ -660,7 +682,7 @@ bool isMyTurn = (player.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
     [PunRPC]
     void RPC_ForceCardReset()
     {
-        Log("RPC_ForceCardReset - Resetting cards and timer for ALL players");
+        Log("RPC_ForceCardReset - Clearing played cards for ALL players");
    
      // **CRITICAL FIX: Set card counter to match current question (outputManager.counter)**
   if (cardManager != null)
@@ -691,28 +713,15 @@ bool isMyTurn = (player.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
       
       Log($"Card counter is {cardManager.counter} (valid range: 0-{cardManager.cardContainer.Count - 1})");
             
-  // Reset cards back to grid and randomize
+  // Only reset cards back to grid (don't randomize yet - that happens when turn changes)
+  // This clears any played cards and ensures all cards are back in the grid
 cardManager.ResetCards();
-  cardManager.StartCoroutine(cardManager.Randomize());
-            Log("Cards reset and randomized for current question");
+            Log("Cards reset to grid (randomization will happen on turn change)");
    }
   else
  {
       LogError("CardManager is NULL!");
         }
-      
-  // Reset and restart timer for all players
-        Timer timer = FindObjectOfType<Timer>();
-  if (timer != null)
-   {
-      timer.ResetTimer();
-   timer.StartTimer();
-   Log("Timer reset and restarted for all players");
-        }
-   else
-{
-      LogWarning("Timer not found in scene!");
-    }
     }
     
     /// <summary>
@@ -1164,12 +1173,12 @@ playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
      Log($"Activating next enemy: {enemyManager.counter}");
      photonView.RPC("RPC_ActivateNextEnemy", RpcTarget.All);
             
-       // Start timer and advance turn
-      StartTimerForAllPlayers();
+       // Advance turn (timer will start automatically via OnTurnChanged)
             yield return new WaitForSeconds(0.5f);
             
          if (turnSystem != null)
        {
+      Log("Advancing to next player's turn for new enemy");
       turnSystem.EndTurn();
             }
         }
