@@ -153,82 +153,72 @@ session: {
   
       // Check if this is a Google Sign-In
              if (session.user.app_metadata.provider === 'google') {
-        console.log('[Supabase] Google Sign-In successful!');
-         
-  // Load or create player data
-    try {
-        console.log('[Supabase] 🔍 Loading player data for user:', session.user.id);
-        
-        // Add timeout to prevent hanging
-        const queryPromise = window.supabase
-      .from('player_data')
-  .select('*')
-     .eq('user_id', session.user.id)
-  .single();
-  
-        const timeoutPromise = new Promise((resolve) => 
-            setTimeout(() => resolve({ data: null, error: { message: 'Query timeout' } }), 5000)
-        );
-        
-        const { data: playerData, error: playerError } = await Promise.race([queryPromise, timeoutPromise]);
-      
-        console.log('[Supabase] ✅ Player data query completed!');
-        console.log('[Supabase] Result:', { playerData, playerError });
-
-if (playerError && playerError.message === 'Query timeout') {
-          console.error('[Supabase] ⏱️ Query timeout! This may be an RLS (Row Level Security) issue.');
-          console.error('[Supabase] Continuing without player data - Unity will handle it...');
+         console.log('[Supabase] Google Sign-In successful!');
           
-          // Send auth success anyway, Unity will create player data
-          await waitForUnityInstance();
-          SendMessageToUnity('AuthManager', 'OnGoogleSignInSuccess', JSON.stringify(authResponse));
-          console.log('[Supabase] ✅ Sent auth success despite timeout');
-          return; // Exit early
-      } else if (playerError && playerError.code === 'PGRST116') {
-          console.log('[Supabase] 📝 No player data found, creating new...');
-          // Create new player data
- const username = session.user.email.split('@')[0];
-      
-          const { data: newPlayerData, error: createError } = await window.supabase
-  .from('player_data')
-   .insert({
-user_id: session.user.id,
-email: session.user.email,
-     username: username,
- levels_unlocked: 6,
-  current_money: 0,
-unlocked_cosmetics: '[]'
-  })
- .select()
-             .single();
-   
-if (!createError && newPlayerData) {
-    console.log('[Supabase] Player data created:', newPlayerData.username);
-    console.log('[Supabase] Waiting for Unity instance...');
-await waitForUnityInstance();
-    console.log('[Supabase] Sending OnPlayerDataCreated to Unity...');
-  SendMessageToUnity('PlayerDataManager', 'OnPlayerDataCreated', JSON.stringify(newPlayerData));
-} else {
-    console.error('[Supabase] Failed to create player data:', createError);
-}
-      } else if (!playerError && playerData) {
-         console.log('[Supabase] Player data found:', playerData.username);
-         console.log('[Supabase] Waiting for Unity instance...');
-           await waitForUnityInstance();
-           console.log('[Supabase] Sending OnPlayerDataLoaded to Unity...');
-        SendMessageToUnity('PlayerDataManager', 'OnPlayerDataLoaded', JSON.stringify(playerData));
-   } else if (playerError) {
-        console.error('[Supabase] Error loading player data:', playerError);
-   }
-  } catch (playerLoadError) {
-        console.error('[Supabase] Exception loading player data:', playerLoadError);
-        }
+   // Load or create player data
+     try {
+         console.log('[Supabase] 🔍 Loading player data for user:', session.user.id);
          
-             console.log('[Supabase] Waiting for Unity before sending auth success...');
-    await waitForUnityInstance();
-    console.log('[Supabase] Sending OnGoogleSignInSuccess to Unity...');
-   SendMessageToUnity('AuthManager', 'OnGoogleSignInSuccess', JSON.stringify(authResponse));
-               console.log('[Supabase] Google Sign-In callbacks sent to Unity!');
+         // Add timeout to prevent hanging
+         const queryPromise = window.supabase
+       .from('player_data')
+   .select('*')
+      .eq('user_id', session.user.id)
+   .single();
+   
+         const timeoutPromise = new Promise((resolve) => 
+             setTimeout(() => resolve({ data: null, error: { message: 'Query timeout' } }), 5000)
+         );
+         
+         const { data: playerData, error: playerError } = await Promise.race([queryPromise, timeoutPromise]);
+       
+         console.log('[Supabase] ✅ Player data query completed!');
+         console.log('[Supabase] Result:', { playerData, playerError });
+       
+if (playerError && playerError.message === 'Query timeout') {
+           console.error('[Supabase] ⏱️ Query timeout! This may be an RLS (Row Level Security) issue.');
+           console.error('[Supabase] Continuing without player data - Unity will handle it...');
+           
+           // Send auth success anyway, Unity will create player data
+           await waitForUnityInstance();
+           SendMessageToUnity('AuthManager', 'OnGoogleSignInSuccess', JSON.stringify(authResponse));
+           console.log('[Supabase] ✅ Sent auth success despite timeout');
+           return; // Exit early
+       } else if (playerError && playerError.code === 'PGRST116') {
+           // Create new player data
+  const username = session.user.email.split('@')[0];
+       
+           const { data: newPlayerData, error: createError } = await window.supabase
+   .from('player_data')
+    .insert({
+user_id: session.user.id,
+ email: session.user.email,
+      username: username,
+  levels_unlocked: 5,
+   current_money: 0,
+unlocked_cosmetics: '[]'
+   })
+  .select()
+              .single();
+    
+ if (!createError && newPlayerData) {
+     console.log('[Supabase] Player data created, waiting for Unity...');
+ await waitForUnityInstance();
+   SendMessageToUnity('PlayerDataManager', 'OnPlayerDataCreated', JSON.stringify(newPlayerData));
+ }
+       } else if (!playerError && playerData) {
+          console.log('[Supabase] Player data loaded, waiting for Unity...');
+            await waitForUnityInstance();
+         SendMessageToUnity('PlayerDataManager', 'OnPlayerDataLoaded', JSON.stringify(playerData));
+    }
+   } catch (playerLoadError) {
+         console.error('[Supabase] Error loading player data:', playerLoadError);
+         }
+          
+              console.log('[Supabase] Waiting for Unity before sending auth success...');
+     await waitForUnityInstance();
+    SendMessageToUnity('AuthManager', 'OnGoogleSignInSuccess', JSON.stringify(authResponse));
+                console.log('[Supabase] Google Sign-In callbacks sent to Unity!');
            } else {
    // Regular email/password login
       await waitForUnityInstance();
