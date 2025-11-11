@@ -10,6 +10,7 @@ public class CardManager : MonoBehaviour
     public List<CardDisplayContainer> cardDisplayContainer = new List<CardDisplayContainer>();
 
     private List<Item> chosenCards = new List<Item>();
+    private bool isRandomizing = false; // Prevent multiple simultaneous randomizations
 
     [System.Serializable]
     public class CardListContainer
@@ -31,6 +32,15 @@ public class CardManager : MonoBehaviour
 
     public IEnumerator Randomize()
     {
+        // Prevent multiple simultaneous randomizations
+        if (isRandomizing)
+        {
+            Debug.LogWarning($"[CardManager] Randomize already in progress - skipping duplicate call");
+            yield break;
+        }
+        
+        isRandomizing = true;
+        
         Debug.Log($"[CardManager] ===== RANDOMIZE STARTED =====");
         Debug.Log($"[CardManager] Counter: {counter}");
         Debug.Log($"[CardManager] cardContainer.Count: {cardContainer.Count}");
@@ -39,6 +49,7 @@ public class CardManager : MonoBehaviour
         if (counter < 0 || counter >= cardContainer.Count || counter >= cardDisplayContainer.Count)
         {
             Debug.LogWarning($"CardManager counter {counter} is out of range. Cannot randomize cards.");
+            isRandomizing = false;
             yield break;
         }
 
@@ -47,13 +58,30 @@ public class CardManager : MonoBehaviour
         
         chosenCards = new List<Item>(cardContainer[counter].cards);
         Debug.Log($"[CardManager] chosenCards populated with {chosenCards.Count} items");
+        
+        // Verify no duplicates in source data
+        HashSet<string> uniqueCheck = new HashSet<string>();
+        foreach (var card in chosenCards)
+        {
+            if (!uniqueCheck.Add(card.cardName))
+            {
+                Debug.LogWarning($"[CardManager] DUPLICATE CARD IN SOURCE DATA: {card.cardName}");
+            }
+        }
 
         for (int i = 0; i < cardDisplayContainer[counter].cardDisplay.Count; i++)
         {
+            if (chosenCards.Count == 0)
+            {
+                Debug.LogError($"[CardManager] Ran out of cards at index {i}! This shouldn't happen.");
+                break;
+            }
+            
             Debug.Log($"[CardManager] Randomizing card {i + 1}/{cardDisplayContainer[counter].cardDisplay.Count}");
             Debug.Log($"[CardManager]   Card GameObject: {cardDisplayContainer[counter].cardDisplay[i].gameObject.name}");
             Debug.Log($"[CardManager]   Card Parent: {cardDisplayContainer[counter].cardDisplay[i].gameObject.transform.parent?.name ?? "NULL"}");
             Debug.Log($"[CardManager]   Card Active: {cardDisplayContainer[counter].cardDisplay[i].gameObject.activeSelf}");
+            Debug.Log($"[CardManager]   Cards remaining in pool: {chosenCards.Count}");
             
             int rand = Random.Range(0, chosenCards.Count);
 
@@ -70,6 +98,7 @@ public class CardManager : MonoBehaviour
             chosenCards.RemoveAt(rand);
         }
         
+        isRandomizing = false;
         Debug.Log($"[CardManager] ===== RANDOMIZE COMPLETE ({cardDisplayContainer[counter].cardDisplay.Count} cards activated) =====");
     }
 

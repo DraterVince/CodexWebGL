@@ -1201,8 +1201,20 @@ playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
    }
         else
             {
-          // Enemy still alive - advance turn so next player can try
-      Log("Enemy still alive - forcing card reset then advancing turn");
+          // Enemy still alive but player got correct answer - increment card set
+      Log("Enemy still alive - incrementing card counter and advancing turn");
+            
+            // **CRITICAL: Increment cardManager.counter on EVERY correct answer**
+            // This changes the card set for the next player
+            if (cardManager != null)
+            {
+                cardManager.counter++;
+                Log($"CardManager counter incremented to {cardManager.counter} after correct answer");
+            }
+            
+            // Sync ALL counters to all clients
+            Log($"Syncing all counters after correct answer: CardManager={cardManager.counter}, PlayButton={playCardButton.counter}, Output={playCardButton.outputManager.counter}");
+            SyncAllCountersGlobally();
             
        // **CRITICAL: Force card reset BEFORE advancing turn**
        // This ensures cards are reset for the next player's turn
