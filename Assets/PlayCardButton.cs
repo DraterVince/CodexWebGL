@@ -181,11 +181,21 @@ public class PlayCardButton : MonoBehaviour
                 if (playedCard.name == correctAnswersContainer[outputManager.counter].correctAnswers[counter])
                 {
         int currentAnswerIndex = counter;
-      cardManager.counter++;
-     counter++;
-      if (isMultiplayerMode)
+        
+        // In multiplayer, don't increment counters locally - let server control via RPC
+        if (!isMultiplayerMode)
+        {
+            // cardManager.counter should NOT increment here - it only increments when enemy dies (next question)
+            // Only playButton.counter increments (tracks which answer within current question)
+            counter++;
+        }
+        
+        if (isMultiplayerMode)
        {
-   NotifyMultiplayerCardPlayed(true, currentAnswerIndex);
+            // Send to server with incremented playButton.counter
+            // cardManager.counter stays the same (same question)
+            // counter + 1 = next answer index for this question
+            NotifyMultiplayerCardPlayed(true, currentAnswerIndex);
          }
 
        if (useJumpAttackAnimation && playerJumpAttack != null && enemyManager.counter < enemyManager.enemies.Count)
@@ -291,7 +301,10 @@ PlayerTakeDamage(1);
                 manager.OnCardPlayed(wasCorrect);
                 if (wasCorrect)
                 {
-                    manager.SyncCardState(cardManager.counter, counter, outputManager.counter, answerIndex);
+                    // Sync counter values to all players
+                    // cardManager.counter stays same (same question until enemy dies)
+                    // counter + 1 = next answer index within current question
+                    manager.SyncCardState(cardManager.counter, counter + 1, outputManager.counter, answerIndex);
                 }
                 return;
             }
@@ -310,7 +323,8 @@ PlayerTakeDamage(1);
                             var syncMethod = managerType.GetMethod("SyncCardState");
                             if (syncMethod != null)
                             {
-                                syncMethod.Invoke(managerObj, new object[] { cardManager.counter, counter, outputManager.counter, answerIndex });
+                                // cardManager.counter stays same, only increment playButton.counter
+                                syncMethod.Invoke(managerObj, new object[] { cardManager.counter, counter + 1, outputManager.counter, answerIndex });
                             }
                         }
                         return;

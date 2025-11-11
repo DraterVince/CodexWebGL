@@ -630,24 +630,30 @@ bool isMyTurn = (player.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
               // CRITICAL FIX: Ensure cards are visible by calling ResetCards
               // This ensures cards are properly positioned in the grid
               Log("Ensuring cards are visible for new turn");
-              cardManager.ResetCards();
               
-              // Force a card randomization for the current question
+              // Make sure card counter matches the current question
               if (playCardButton != null && playCardButton.outputManager != null)
               {
                   int currentQuestion = playCardButton.outputManager.counter;
-                  Log($"Current question: {currentQuestion}, Card counter: {cardManager.counter}");
+                  Log($"Current question (outputManager.counter): {currentQuestion}");
+                  Log($"Current cardManager.counter: {cardManager.counter}");
+                  Log($"Current playButton.counter: {playCardButton.counter}");
                   
-                  // Make sure card counter matches the question
+                  // cardManager.counter should match outputManager.counter (which question)
                   if (cardManager.counter != currentQuestion && currentQuestion >= 0 && currentQuestion < cardManager.cardContainer.Count)
                   {
                       cardManager.counter = currentQuestion;
-                      Log($"Corrected card counter to {currentQuestion}");
+                      Log($"Corrected cardManager.counter to {currentQuestion}");
                   }
               }
               
+              // Reset cards back to grid
+              cardManager.ResetCards();
+              Log($"Cards reset for question {cardManager.counter}");
+              
+              // Randomize cards for the current question
               cardManager.StartCoroutine(cardManager.Randomize());
-              Log("Cards randomized for current player's turn");
+              Log($"Started randomizing cards for question {cardManager.counter}");
      }
             
             // Start timer only for the player whose turn it is
@@ -1292,24 +1298,25 @@ playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
     void RPC_SyncCardState(int cardCounter, int playButtonCounter, int outputCounter, int answerIndex)
     {
       Log($"===== RPC_SyncCardState =====");
-      Log($"Card Counter: {cardCounter}, PlayButton Counter: {playButtonCounter}, Output Counter: {outputCounter}, Answer Index: {answerIndex}");
+      Log($"Received - CardManager: {cardCounter}, PlayButton: {playButtonCounter}, Output: {outputCounter}, Answer: {answerIndex}");
+      Log($"Before sync - CardManager.counter: {(cardManager != null ? cardManager.counter.ToString() : "null")}, PlayButton.counter: {(playCardButton != null ? playCardButton.counter.ToString() : "null")}");
      
    if (cardManager != null) 
    {
        cardManager.counter = cardCounter;
-       Log($"CardManager counter set to: {cardCounter}");
+       Log($"✓ CardManager.counter synced to: {cardCounter} (which question's card set to use)");
    }
    
    if (playCardButton != null) 
    {
        playCardButton.counter = playButtonCounter;
-       Log($"PlayButton counter set to: {playButtonCounter}");
+       Log($"✓ PlayButton.counter synced to: {playButtonCounter} (next answer index within question)");
    }
    
    if (playCardButton != null && playCardButton.outputManager != null) 
    {
        playCardButton.outputManager.counter = outputCounter;
-       Log($"OutputManager counter set to: {outputCounter}");
+       Log($"✓ OutputManager.counter synced to: {outputCounter} (which question/enemy)");
    }
    
     // Activate the correct answer in the UI
