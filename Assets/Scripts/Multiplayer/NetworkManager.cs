@@ -109,6 +109,14 @@ public class NetworkManager : MonoBehaviourPunCallbacks
 
         Debug.Log($"[NetworkManager] Scene: {currentScene}, Is Multiplayer: {isMultiplayerScene}");
 
+        // If we're already in a Photon room, STAY CONNECTED regardless of scene name
+        // The Master Client is managing the scene loading via PhotonNetwork.LoadLevel
+        if (PhotonNetwork.InRoom)
+        {
+            Debug.Log($"[NetworkManager] Already in room '{PhotonNetwork.CurrentRoom.Name}' - staying connected");
+            return;
+        }
+
         if (isMultiplayerScene && !PhotonNetwork.IsConnected)
         {
             // We're in a multiplayer scene and not connected - connect now
@@ -117,7 +125,7 @@ public class NetworkManager : MonoBehaviourPunCallbacks
         }
         else if (!isMultiplayerScene && PhotonNetwork.IsConnected)
         {
-            // We're in a single-player scene but still connected - disconnect
+            // We're in a single-player scene but still connected (and NOT in a room) - disconnect
             shouldBeConnected = false;
             Disconnect();
         }
