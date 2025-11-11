@@ -66,6 +66,7 @@ MonoBehaviour:
   - RPC_StartTimerForPlayer
   - RPC_StopTimer
   - RPC_SyncCorrectAnswer
+  - RPC_SyncAllCounters
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 1

@@ -609,6 +609,13 @@ bool isMyTurn = (player.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
         // Update UI
         UpdateTurnUI();
   
+        // **CRITICAL: Master Client syncs ALL counters to ensure global consistency**
+        if (PhotonNetwork.IsMasterClient)
+        {
+            Log("Master Client - syncing all counters globally before turn starts");
+            SyncAllCountersGlobally();
+        }
+  
         // **CRITICAL FIX: Force card reset via RPC to ensure ALL clients reset**
         if (PhotonNetwork.IsMasterClient)
         {
@@ -631,23 +638,17 @@ bool isMyTurn = (player.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
               // This ensures cards are properly positioned in the grid
               Log("Ensuring cards are visible for new turn");
               
-              // Make sure card counter matches the current question
+              // Log current counter states (DO NOT MODIFY - they should already be synced via RPC)
               if (playCardButton != null && playCardButton.outputManager != null)
               {
-                  int currentQuestion = playCardButton.outputManager.counter;
-                  Log($"Current question (outputManager.counter): {currentQuestion}");
-                  Log($"Current cardManager.counter: {cardManager.counter}");
-                  Log($"Current playButton.counter: {playCardButton.counter}");
-                  
-                  // cardManager.counter should match outputManager.counter (which question)
-                  if (cardManager.counter != currentQuestion && currentQuestion >= 0 && currentQuestion < cardManager.cardContainer.Count)
-                  {
-                      cardManager.counter = currentQuestion;
-                      Log($"Corrected cardManager.counter to {currentQuestion}");
-                  }
+                  Log($"=== COUNTER STATUS ===");
+                  Log($"outputManager.counter (question): {playCardButton.outputManager.counter}");
+                  Log($"cardManager.counter (card set): {cardManager.counter}");
+                  Log($"playButton.counter (answer index): {playCardButton.counter}");
+                  Log($"======================");
               }
               
-              // Reset cards back to grid
+              // Reset cards back to grid (using already-synced cardManager.counter)
               cardManager.ResetCards();
               Log($"Cards reset for question {cardManager.counter}");
               
@@ -689,40 +690,15 @@ bool isMyTurn = (player.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
     void RPC_ForceCardReset()
     {
         Log("RPC_ForceCardReset - Clearing played cards for ALL players");
+        Log($"Current counters - CardManager: {(cardManager != null ? cardManager.counter.ToString() : "null")}, PlayButton: {(playCardButton != null ? playCardButton.counter.ToString() : "null")}, Output: {(playCardButton?.outputManager != null ? playCardButton.outputManager.counter.ToString() : "null")}");
    
-     // **CRITICAL FIX: Set card counter to match current question (outputManager.counter)**
   if (cardManager != null)
         {
-     // IMPORTANT: Card counter should match the current question being asked
-            // outputManager.counter tells us which question we're on
- if (playCardButton != null && playCardButton.outputManager != null)
-   {
-        int correctCounter = playCardButton.outputManager.counter;
-        
-        // Validate the counter is in range
-     if (correctCounter >= 0 && correctCounter < cardManager.cardContainer.Count)
-           {
-   cardManager.counter = correctCounter;
-        Log($"Card counter set to {correctCounter} to match current question");
-             }
-    else
-       {
-      LogWarning($"Output counter {correctCounter} out of range! Resetting to 0");
- cardManager.counter = 0;
-}
-   }
-         else
-{
-       LogWarning("PlayCardButton or OutputManager null - resetting counter to 0");
-        cardManager.counter = 0;
-   }
-      
-      Log($"Card counter is {cardManager.counter} (valid range: 0-{cardManager.cardContainer.Count - 1})");
-            
-  // Only reset cards back to grid (don't randomize yet - that happens when turn changes)
-  // This clears any played cards and ensures all cards are back in the grid
-cardManager.ResetCards();
-            Log("Cards reset to grid (randomization will happen on turn change)");
+            // DO NOT modify counters here - they should already be synced via RPC_SyncCardState
+            // Just reset card positions back to grid
+            Log($"Resetting cards to grid for question {cardManager.counter}");
+            cardManager.ResetCards();
+            Log("Cards cleared from played area (counters unchanged, randomization happens on turn change)");
    }
   else
  {
@@ -731,7 +707,50 @@ cardManager.ResetCards();
     }
     
     /// <summary>
-    /// Sync card manager counter across all clients
+    /// Sync ALL counters to all clients at once (called by Master Client)
+    /// Use this to ensure global consistency at critical points
+    /// </summary>
+    public void SyncAllCountersGlobally()
+    {
+        if (!PhotonNetwork.IsMasterClient) return;
+        
+        int cardCounter = cardManager != null ? cardManager.counter : 0;
+        int playButtonCounter = playCardButton != null ? playCardButton.counter : 0;
+        int outputCounter = (playCardButton != null && playCardButton.outputManager != null) ? playCardButton.outputManager.counter : 0;
+        
+        Log($"[Master] Syncing ALL counters globally: CardManager={cardCounter}, PlayButton={playButtonCounter}, Output={outputCounter}");
+        photonView.RPC("RPC_SyncAllCounters", RpcTarget.All, cardCounter, playButtonCounter, outputCounter);
+    }
+    
+    [PunRPC]
+    void RPC_SyncAllCounters(int cardCounter, int playButtonCounter, int outputCounter)
+    {
+        Log($"===== RPC_SyncAllCounters RECEIVED =====");
+        Log($"Setting ALL counters: CardManager={cardCounter}, PlayButton={playButtonCounter}, Output={outputCounter}");
+        
+        if (cardManager != null)
+        {
+            cardManager.counter = cardCounter;
+            Log($"✓ CardManager.counter = {cardCounter}");
+        }
+        
+        if (playCardButton != null)
+        {
+            playCardButton.counter = playButtonCounter;
+            Log($"✓ PlayButton.counter = {playButtonCounter}");
+        }
+        
+        if (playCardButton != null && playCardButton.outputManager != null)
+        {
+            playCardButton.outputManager.counter = outputCounter;
+            Log($"✓ OutputManager.counter = {outputCounter}");
+        }
+        
+        Log("===== ALL COUNTERS SYNCED =====");
+    }
+    
+    /// <summary>
+    /// Sync card manager counter across all clients (deprecated - use SyncAllCountersGlobally)
     /// </summary>
     [PunRPC]
     void RPC_SyncCardCounter(int newCounter)
@@ -1156,16 +1175,21 @@ playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
      
         if (enemyManager == null || playCardButton == null) yield break;
         
-        // Increment counters
+        // Increment counters FOR NEXT QUESTION/ENEMY
      enemyManager.counter++;
         playCardButton.outputManager.counter++;
-    playCardButton.counter = 0;
+    playCardButton.counter = 0; // Reset answer index for new question
         
-        // Sync counters to all clients
-        photonView.RPC("RPC_SyncCounters", RpcTarget.All, 
- enemyManager.counter, 
-          playCardButton.outputManager.counter, 
-   playCardButton.counter);
+        // **CRITICAL: Also increment cardManager.counter to match new question**
+        if (cardManager != null)
+        {
+            cardManager.counter++;
+            Log($"CardManager counter incremented to {cardManager.counter} for next question");
+        }
+        
+        // Sync ALL counters to all clients using global sync
+        Log($"Syncing all counters after enemy defeat: CardManager={cardManager.counter}, PlayButton={playCardButton.counter}, Output={playCardButton.outputManager.counter}");
+        SyncAllCountersGlobally();
     
      // Check if all enemies defeated
         if (enemyManager.counter >= enemyManager.enemies.Count)
