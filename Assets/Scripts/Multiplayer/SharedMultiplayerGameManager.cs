@@ -905,6 +905,9 @@ Log($"RPC_SyncCardCounter - Setting counter to {newCounter}");
       Log("No animation - enemy damaged immediately");
     }
    }
+        
+        // NOTE: Turn advancement for correct answers is handled in RPC_SyncEnemyHealth
+        // This ensures the turn advances whether the enemy dies or survives
  }
   else
    {
@@ -944,8 +947,13 @@ GameObject currentEnemy = playCardButton.enemyManager.enemies[playCardButton.ene
 DamageSharedHealth(1f);
   }
     
-   Log("Wrong answer - advancing turn after delay");
- StartCoroutine(AdvanceTurnAfterDelay(1.0f));
+   Log("Wrong answer - damaging shared health and advancing turn after delay");
+         
+         // Force card reset for all players before advancing turn
+         photonView.RPC("RPC_ForceCardReset", RpcTarget.All);
+         
+         // Advance turn after delay to allow animation to complete
+         StartCoroutine(AdvanceTurnAfterDelay(1.0f));
     }
   else
         {
@@ -1003,8 +1011,12 @@ playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
           // Enemy still alive - advance turn so next player can try
       Log("Enemy still alive - forcing card reset then advancing turn");
             
-       // **CRITICAL FIX: Force card reset BEFORE advancing turn**
+       // **CRITICAL: Force card reset BEFORE advancing turn**
+       // This ensures cards are reset for the next player's turn
  photonView.RPC("RPC_ForceCardReset", RpcTarget.All);
+         
+         // Advance turn after a short delay to allow animations/UI updates
+         // This ensures the turn always advances after a correct answer, even if enemy survives
          StartCoroutine(AdvanceTurnAfterDelay(1.0f));
   }
         }

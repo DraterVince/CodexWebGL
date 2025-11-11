@@ -173,6 +173,8 @@ else
 
     /// <summary>
     /// End current player's turn and move to next player
+    /// Can be called by Master Client to advance turn even if it's not their turn
+    /// (e.g., after a player's action completes)
     /// </summary>
     public void EndTurn()
     {
@@ -180,9 +182,11 @@ else
   Debug.Log($"[CodexMultiplayerIntegration] IsMyTurn: {IsMyTurn()}");
         Debug.Log($"[CodexMultiplayerIntegration] IsMasterClient: {PhotonNetwork.IsMasterClient}");
     
-        if (!IsMyTurn())
+        // Master Client can always advance turns (for automatic progression after card plays)
+        // Non-Master Clients can only end their own turn
+        if (!PhotonNetwork.IsMasterClient && !IsMyTurn())
  {
-        Debug.LogWarning("[CodexMultiplayerIntegration] Cannot end turn - it's not your turn!");
+        Debug.LogWarning("[CodexMultiplayerIntegration] Cannot end turn - it's not your turn and you're not Master Client!");
           return;
       }
 
