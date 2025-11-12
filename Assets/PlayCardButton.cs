@@ -210,6 +210,15 @@ public class PlayCardButton : MonoBehaviour
             outputManager.answerListContainer[outputManager.counter].answers[currentAnswerIndex].SetActive(true);
             UpdateEnemyHealthUI();
             delayHealthUIUpdate = false;
+            
+            // If enemy is still alive after correct answer, increment card counter and randomize new set
+            if (enemyHealthAmount[enemyManager.counter] > 0f)
+            {
+                cardManager.counter++;
+                cardManager.ResetCards();
+                cardManager.StartRandomization();
+            }
+            
             CheckEnemyDefeat(currentAnswerIndex);
         }
         else
@@ -227,6 +236,15 @@ public class PlayCardButton : MonoBehaviour
             EnemyTakeDamage(1);
             outputManager.answerListContainer[outputManager.counter].answers[currentAnswerIndex].SetActive(true);
             UpdateEnemyHealthUI();
+            
+            // If enemy is still alive after correct answer, increment card counter and randomize new set
+            if (enemyHealthAmount[enemyManager.counter] > 0f)
+            {
+                cardManager.counter++;
+                cardManager.ResetCards();
+                cardManager.StartRandomization();
+            }
+            
             CheckEnemyDefeat(currentAnswerIndex);
         }
         else
@@ -477,6 +495,12 @@ enemyHP.text = enemyHealthAmount[enemyManager.counter].ToString() + " / " + enem
             enemyManager.counter++;
     outputManager.counter++;
      counter = 0;
+            
+            // Increment cardManager.counter to match the new question/enemy
+            if (cardManager != null)
+            {
+                cardManager.counter++;
+            }
 
       if (enemyManager.counter >= enemyManager.enemies.Count)
   {
