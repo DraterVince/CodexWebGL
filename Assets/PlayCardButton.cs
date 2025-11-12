@@ -211,27 +211,41 @@ public class PlayCardButton : MonoBehaviour
             UpdateEnemyHealthUI();
             delayHealthUIUpdate = false;
             
-            // If enemy is still alive after correct answer, increment card counter and randomize new set
-            if (enemyHealthAmount[enemyManager.counter] > 0f)
+            // Check if enemy is defeated
+            if (enemyHealthAmount[enemyManager.counter] <= 0f)
             {
-                // Only increment if we have more card sets available
-                if (cardManager != null && cardManager.counter + 1 < cardManager.cardContainer.Count && 
-                    cardManager.counter + 1 < cardManager.cardDisplayContainer.Count)
+                // Enemy defeated - move to next enemy/question
+                CheckEnemyDefeat(currentAnswerIndex);
+            }
+            else
+            {
+                // Enemy still alive - increment card counter and randomize new set (like multiplayer)
+                if (cardManager != null)
                 {
-                    int oldCounter = cardManager.counter;
-                    cardManager.counter++;
-                    Debug.Log($"[PlayCardButton] Correct answer - incrementing card counter from {oldCounter} to {cardManager.counter}");
-                    Debug.Log($"[PlayCardButton] Card sets available: {cardManager.cardContainer.Count}, Display sets: {cardManager.cardDisplayContainer.Count}");
-                    cardManager.ResetCards();
-                    cardManager.StartRandomization();
-                }
-                else
-                {
-                    Debug.LogWarning($"[PlayCardButton] Cannot increment card counter - reached max card sets. Current: {cardManager?.counter ?? -1}, Max: {cardManager?.cardContainer.Count ?? 0}");
+                    // Only increment if we have more card sets available
+                    if (cardManager.counter + 1 < cardManager.cardContainer.Count && 
+                        cardManager.counter + 1 < cardManager.cardDisplayContainer.Count)
+                    {
+                        cardManager.counter++;
+                        Debug.Log($"[PlayCardButton] Correct answer - enemy alive, incrementing card counter to {cardManager.counter}");
+                        
+                        // Reset and randomize cards for new set
+                        cardManager.ResetCards();
+                        cardManager.StartRandomization();
+                        
+                        // Reset timer for next question
+                        if (timer != null)
+                        {
+                            timer.ResetTimer();
+                            timer.StartTimer();
+                        }
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[PlayCardButton] Cannot increment card counter - reached max card sets. Current: {cardManager.counter}, Max: {cardManager.cardContainer.Count}");
+                    }
                 }
             }
-            
-            CheckEnemyDefeat(currentAnswerIndex);
         }
         else
         {
@@ -249,27 +263,41 @@ public class PlayCardButton : MonoBehaviour
             outputManager.answerListContainer[outputManager.counter].answers[currentAnswerIndex].SetActive(true);
             UpdateEnemyHealthUI();
             
-            // If enemy is still alive after correct answer, increment card counter and randomize new set
-            if (enemyHealthAmount[enemyManager.counter] > 0f)
+            // Check if enemy is defeated
+            if (enemyHealthAmount[enemyManager.counter] <= 0f)
             {
-                // Only increment if we have more card sets available
-                if (cardManager != null && cardManager.counter + 1 < cardManager.cardContainer.Count && 
-                    cardManager.counter + 1 < cardManager.cardDisplayContainer.Count)
+                // Enemy defeated - move to next enemy/question
+                CheckEnemyDefeat(currentAnswerIndex);
+            }
+            else
+            {
+                // Enemy still alive - increment card counter and randomize new set (like multiplayer)
+                if (cardManager != null)
                 {
-                    int oldCounter = cardManager.counter;
-                    cardManager.counter++;
-                    Debug.Log($"[PlayCardButton] Correct answer - incrementing card counter from {oldCounter} to {cardManager.counter}");
-                    Debug.Log($"[PlayCardButton] Card sets available: {cardManager.cardContainer.Count}, Display sets: {cardManager.cardDisplayContainer.Count}");
-                    cardManager.ResetCards();
-                    cardManager.StartRandomization();
-                }
-                else
-                {
-                    Debug.LogWarning($"[PlayCardButton] Cannot increment card counter - reached max card sets. Current: {cardManager?.counter ?? -1}, Max: {cardManager?.cardContainer.Count ?? 0}");
+                    // Only increment if we have more card sets available
+                    if (cardManager.counter + 1 < cardManager.cardContainer.Count && 
+                        cardManager.counter + 1 < cardManager.cardDisplayContainer.Count)
+                    {
+                        cardManager.counter++;
+                        Debug.Log($"[PlayCardButton] Correct answer - enemy alive, incrementing card counter to {cardManager.counter}");
+                        
+                        // Reset and randomize cards for new set
+                        cardManager.ResetCards();
+                        cardManager.StartRandomization();
+                        
+                        // Reset timer for next question
+                        if (timer != null)
+                        {
+                            timer.ResetTimer();
+                            timer.StartTimer();
+                        }
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"[PlayCardButton] Cannot increment card counter - reached max card sets. Current: {cardManager.counter}, Max: {cardManager.cardContainer.Count}");
+                    }
                 }
             }
-            
-            CheckEnemyDefeat(currentAnswerIndex);
         }
         else
         {
@@ -314,11 +342,12 @@ PlayerTakeDamage(1);
          }
      }
 
-         if (!isMultiplayerMode)
-               {
-   cardManager.ResetCards();
-              cardManager.StartRandomization();
-        }
+         // In singleplayer, wrong answers also reset and randomize cards
+         if (!isMultiplayerMode && cardManager != null)
+         {
+             cardManager.ResetCards();
+             cardManager.StartRandomization();
+         }
      }
              if (isMultiplayerMode && parent != null && parent.childCount > 0)
                 {
@@ -513,59 +542,57 @@ enemyHP.text = enemyHealthAmount[enemyManager.counter].ToString() + " / " + enem
     {
         if (enemyHealthAmount[enemyManager.counter] <= 0f)
         {
-         DeactivateEnemy();
-     DeactivateOutput();
+            // Enemy defeated - move to next enemy/question (like multiplayer AdvanceToNextEnemyOrEnd)
+            DeactivateEnemy();
+            DeactivateOutput();
             DeactivateAnswer();
+            
+            // Increment counters for next question/enemy
             enemyManager.counter++;
-    outputManager.counter++;
-     counter = 0;
+            outputManager.counter++;
+            counter = 0; // Reset answer index for new question
             
             // Increment cardManager.counter to match the new question/enemy
             if (cardManager != null)
             {
                 cardManager.counter++;
+                Debug.Log($"[PlayCardButton] Enemy defeated - incrementing card counter to {cardManager.counter} for next question");
             }
 
-      if (enemyManager.counter >= enemyManager.enemies.Count)
-  {
-       Invoke("ShowWinScreen", 1.0f);
-     }
-    else if (enemyManager.counter < enemyHealthAmount.Count)
- {
-          ActivateEnemy();
-      ActivateOutput();
-        ActivateAnswer();
+            if (enemyManager.counter >= enemyManager.enemies.Count)
+            {
+                // All enemies defeated
+                Invoke("ShowWinScreen", 1.0f);
+            }
+            else if (enemyManager.counter < enemyHealthAmount.Count)
+            {
+                // Activate next enemy
+                ActivateEnemy();
+                ActivateOutput();
+                ActivateAnswer();
 
-     if (isMultiplayerMode)
-    {
-         NotifyStartTimer();
-     NotifyAdvanceTurn();
+                if (isMultiplayerMode)
+                {
+                    NotifyStartTimer();
+                    NotifyAdvanceTurn();
                 }
- else
-    {
-           cardManager.ResetCards();
-              cardManager.StartRandomization();
-          timer.ResetTimer();
-          timer.StartTimer();
-       }
+                else
+                {
+                    // Reset and randomize cards for new enemy/question
+                    if (cardManager != null)
+                    {
+                        cardManager.ResetCards();
+                        cardManager.StartRandomization();
+                    }
+                    if (timer != null)
+                    {
+                        timer.ResetTimer();
+                        timer.StartTimer();
+                    }
+                }
             }
         }
-        else
-        {
-   
-            if (isMultiplayerMode)
-   {
-     NotifyStartTimer();
-      NotifyAdvanceTurn();
-  }
-            else
-      {
-                cardManager.ResetCards();
-     cardManager.StartRandomization();
-    timer.ResetTimer();
-      timer.StartTimer();
-            }
-        }
+        // Note: If enemy is still alive, card counter increment is handled in PlayButton() above
     }
     private void NotifyStartTimer()
     {

@@ -92,42 +92,50 @@ public class CardManager : MonoBehaviour
         Debug.Log($"[CardManager] cardContainer[{counter}].cards.Count: {cardContainer[counter].cards.Count}");
         Debug.Log($"[CardManager] cardDisplayContainer[{counter}].cardDisplay.Count: {cardDisplayContainer[counter].cardDisplay.Count}");
         
-        // Create a list of unique cards (filter duplicates by cardName)
+        // Use all cards from the container - ensure each card object is only used once
         chosenCards = new List<Item>();
-        HashSet<string> seenCardNames = new HashSet<string>();
+        HashSet<Item> seenCardObjects = new HashSet<Item>(); // Track by object reference, not name
         
-        foreach (var card in cardContainer[counter].cards)
+        // Log all cards in container and filter out duplicate object references
+        Debug.Log($"[CardManager] === CARD CONTAINER ANALYSIS ===");
+        Debug.Log($"[CardManager] cardContainer[{counter}].cards.Count: {cardContainer[counter].cards.Count}");
+        for (int idx = 0; idx < cardContainer[counter].cards.Count; idx++)
         {
-            if (card != null && !string.IsNullOrEmpty(card.cardName))
+            var card = cardContainer[counter].cards[idx];
+            if (card != null)
             {
-                if (seenCardNames.Add(card.cardName))
+                // Only add if we haven't seen this exact card object before
+                if (seenCardObjects.Add(card))
                 {
+                    Debug.Log($"[CardManager]   Card[{idx}]: {card.cardName} (Item: {card.name}) - ADDED");
                     chosenCards.Add(card);
                 }
                 else
                 {
-                    Debug.LogWarning($"[CardManager] DUPLICATE CARD FILTERED OUT: {card.cardName}");
+                    Debug.LogWarning($"[CardManager]   Card[{idx}]: {card.cardName} (Item: {card.name}) - DUPLICATE OBJECT REFERENCE, SKIPPED");
                 }
             }
+            else
+            {
+                Debug.LogWarning($"[CardManager]   Card[{idx}]: NULL!");
+            }
         }
+        Debug.Log($"[CardManager] === END ANALYSIS ===");
         
-        Debug.Log($"[CardManager] chosenCards populated with {chosenCards.Count} unique items (from {cardContainer[counter].cards.Count} total)");
+        Debug.Log($"[CardManager] chosenCards populated with {chosenCards.Count} unique card objects (from {cardContainer[counter].cards.Count} total)");
         
         // Check if we have enough cards
         int cardsNeeded = cardDisplayContainer[counter].cardDisplay.Count;
         if (chosenCards.Count < cardsNeeded)
         {
-            Debug.LogError($"[CardManager] NOT ENOUGH UNIQUE CARDS! Need {cardsNeeded}, but only have {chosenCards.Count} unique cards in cardContainer[{counter}]");
-        }
-
-        // Only randomize if we have enough unique cards
-        if (chosenCards.Count < cardDisplayContainer[counter].cardDisplay.Count)
-        {
-            Debug.LogError($"[CardManager] Cannot randomize - need {cardDisplayContainer[counter].cardDisplay.Count} cards but only have {chosenCards.Count} unique cards!");
+            Debug.LogError($"[CardManager] NOT ENOUGH UNIQUE CARDS! Need {cardsNeeded}, but only have {chosenCards.Count} unique card objects in cardContainer[{counter}]");
             isRandomizing = false;
             currentRandomizeCoroutine = null;
             yield break;
         }
+        
+        // Track selected card objects to ensure no duplicates
+        HashSet<Item> selectedCardObjects = new HashSet<Item>();
         
         for (int i = 0; i < cardDisplayContainer[counter].cardDisplay.Count; i++)
         {
@@ -144,19 +152,40 @@ public class CardManager : MonoBehaviour
             Debug.Log($"[CardManager]   Cards remaining in pool: {chosenCards.Count}");
             
             int rand = Random.Range(0, chosenCards.Count);
+            Item selectedCard = chosenCards[rand];
+            string selectedCardName = selectedCard.cardName;
+            
+            // Verify we haven't selected this card object before (shouldn't happen with RemoveAt, but double-check)
+            if (selectedCardObjects.Contains(selectedCard))
+            {
+                Debug.LogError($"[CardManager] CRITICAL ERROR: Card object '{selectedCardName}' was already selected! This indicates a bug in the randomization logic.");
+                // Skip this card and try the next one
+                chosenCards.RemoveAt(rand);
+                i--; // Retry this index
+                continue;
+            }
+            selectedCardObjects.Add(selectedCard);
 
-            cardDisplayContainer[counter].cardDisplay[i].cardName = chosenCards[rand].cardName;
-            cardDisplayContainer[counter].cardDisplay[i].transform.GetChild(0).GetComponentInChildren<TextMeshProUGUI>().text = chosenCards[rand].cardName;
-            cardDisplayContainer[counter].cardDisplay[i].cardDesign.sprite = chosenCards[rand].artwork;
+            cardDisplayContainer[counter].cardDisplay[i].cardName = selectedCardName;
+            cardDisplayContainer[counter].cardDisplay[i].transform.GetChild(0).GetComponentInChildren<TextMeshProUGUI>().text = selectedCardName;
+            cardDisplayContainer[counter].cardDisplay[i].cardDesign.sprite = selectedCard.artwork;
 
             yield return new WaitForSeconds(0.15f);
             cardDisplayContainer[counter].cardDisplay[i].gameObject.SetActive(true);
             cardDisplayContainer[counter].cardDisplay[i].gameObject.transform.localScale = Vector3.one;
             
-            Debug.Log($"[CardManager]   ✓ Card activated with name: {chosenCards[rand].cardName}");
+            Debug.Log($"[CardManager]   ✓ Card activated: {selectedCardName} (Object: {selectedCard.name}, Index: {rand})");
 
+            // Remove the selected card from the pool so it can't be selected again
             chosenCards.RemoveAt(rand);
         }
+        
+        List<string> selectedNames = new List<string>();
+        foreach (var card in selectedCardObjects)
+        {
+            selectedNames.Add(card.cardName);
+        }
+        Debug.Log($"[CardManager] Final selected card names: {string.Join(", ", selectedNames)}");
         
         isRandomizing = false;
         currentRandomizeCoroutine = null;
@@ -184,11 +213,28 @@ public class CardManager : MonoBehaviour
             GameObject cardObj = cardDisplayContainer[counter].cardDisplay[i].gameObject;
             Debug.Log($"[CardManager] Resetting card {i}: {cardObj.name} (Parent: {cardObj.transform.parent?.name ?? "NULL"}, Active: {cardObj.activeSelf})");
             
+            // Clear card data to prevent stale values
+            cardDisplayContainer[counter].cardDisplay[i].cardName = "";
+            
+            // Clear text display
+            try
+            {
+                var textComponent = cardDisplayContainer[counter].cardDisplay[i].transform.GetChild(0)?.GetComponentInChildren<TextMeshProUGUI>();
+                if (textComponent != null)
+                {
+                    textComponent.text = "";
+                }
+            }
+            catch (System.Exception ex)
+            {
+                Debug.LogWarning($"[CardManager] Could not clear text for card {i}: {ex.Message}");
+            }
+            
             cardDisplayContainer[counter].cardDisplay[i].gameObject.SetActive(false);
             cardDisplayContainer[counter].cardDisplay[i].gameObject.transform.SetParent(grid.transform);
             cardDisplayContainer[counter].cardDisplay[i].gameObject.transform.localScale = Vector3.one;
             
-            Debug.Log($"[CardManager]   ✓ Moved to grid, deactivated");
+            Debug.Log($"[CardManager]   ✓ Moved to grid, deactivated, data cleared");
         }
 
         // Also check and clear ANY cards stuck in PlayedCard holders
