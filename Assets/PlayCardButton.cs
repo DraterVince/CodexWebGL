@@ -214,9 +214,21 @@ public class PlayCardButton : MonoBehaviour
             // If enemy is still alive after correct answer, increment card counter and randomize new set
             if (enemyHealthAmount[enemyManager.counter] > 0f)
             {
-                cardManager.counter++;
-                cardManager.ResetCards();
-                cardManager.StartRandomization();
+                // Only increment if we have more card sets available
+                if (cardManager != null && cardManager.counter + 1 < cardManager.cardContainer.Count && 
+                    cardManager.counter + 1 < cardManager.cardDisplayContainer.Count)
+                {
+                    int oldCounter = cardManager.counter;
+                    cardManager.counter++;
+                    Debug.Log($"[PlayCardButton] Correct answer - incrementing card counter from {oldCounter} to {cardManager.counter}");
+                    Debug.Log($"[PlayCardButton] Card sets available: {cardManager.cardContainer.Count}, Display sets: {cardManager.cardDisplayContainer.Count}");
+                    cardManager.ResetCards();
+                    cardManager.StartRandomization();
+                }
+                else
+                {
+                    Debug.LogWarning($"[PlayCardButton] Cannot increment card counter - reached max card sets. Current: {cardManager?.counter ?? -1}, Max: {cardManager?.cardContainer.Count ?? 0}");
+                }
             }
             
             CheckEnemyDefeat(currentAnswerIndex);
@@ -240,9 +252,21 @@ public class PlayCardButton : MonoBehaviour
             // If enemy is still alive after correct answer, increment card counter and randomize new set
             if (enemyHealthAmount[enemyManager.counter] > 0f)
             {
-                cardManager.counter++;
-                cardManager.ResetCards();
-                cardManager.StartRandomization();
+                // Only increment if we have more card sets available
+                if (cardManager != null && cardManager.counter + 1 < cardManager.cardContainer.Count && 
+                    cardManager.counter + 1 < cardManager.cardDisplayContainer.Count)
+                {
+                    int oldCounter = cardManager.counter;
+                    cardManager.counter++;
+                    Debug.Log($"[PlayCardButton] Correct answer - incrementing card counter from {oldCounter} to {cardManager.counter}");
+                    Debug.Log($"[PlayCardButton] Card sets available: {cardManager.cardContainer.Count}, Display sets: {cardManager.cardDisplayContainer.Count}");
+                    cardManager.ResetCards();
+                    cardManager.StartRandomization();
+                }
+                else
+                {
+                    Debug.LogWarning($"[PlayCardButton] Cannot increment card counter - reached max card sets. Current: {cardManager?.counter ?? -1}, Max: {cardManager?.cardContainer.Count ?? 0}");
+                }
             }
             
             CheckEnemyDefeat(currentAnswerIndex);

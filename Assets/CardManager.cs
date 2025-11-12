@@ -92,19 +92,43 @@ public class CardManager : MonoBehaviour
         Debug.Log($"[CardManager] cardContainer[{counter}].cards.Count: {cardContainer[counter].cards.Count}");
         Debug.Log($"[CardManager] cardDisplayContainer[{counter}].cardDisplay.Count: {cardDisplayContainer[counter].cardDisplay.Count}");
         
-        chosenCards = new List<Item>(cardContainer[counter].cards);
-        Debug.Log($"[CardManager] chosenCards populated with {chosenCards.Count} items");
+        // Create a list of unique cards (filter duplicates by cardName)
+        chosenCards = new List<Item>();
+        HashSet<string> seenCardNames = new HashSet<string>();
         
-        // Verify no duplicates in source data
-        HashSet<string> uniqueCheck = new HashSet<string>();
-        foreach (var card in chosenCards)
+        foreach (var card in cardContainer[counter].cards)
         {
-            if (!uniqueCheck.Add(card.cardName))
+            if (card != null && !string.IsNullOrEmpty(card.cardName))
             {
-                Debug.LogWarning($"[CardManager] DUPLICATE CARD IN SOURCE DATA: {card.cardName}");
+                if (seenCardNames.Add(card.cardName))
+                {
+                    chosenCards.Add(card);
+                }
+                else
+                {
+                    Debug.LogWarning($"[CardManager] DUPLICATE CARD FILTERED OUT: {card.cardName}");
+                }
             }
         }
+        
+        Debug.Log($"[CardManager] chosenCards populated with {chosenCards.Count} unique items (from {cardContainer[counter].cards.Count} total)");
+        
+        // Check if we have enough cards
+        int cardsNeeded = cardDisplayContainer[counter].cardDisplay.Count;
+        if (chosenCards.Count < cardsNeeded)
+        {
+            Debug.LogError($"[CardManager] NOT ENOUGH UNIQUE CARDS! Need {cardsNeeded}, but only have {chosenCards.Count} unique cards in cardContainer[{counter}]");
+        }
 
+        // Only randomize if we have enough unique cards
+        if (chosenCards.Count < cardDisplayContainer[counter].cardDisplay.Count)
+        {
+            Debug.LogError($"[CardManager] Cannot randomize - need {cardDisplayContainer[counter].cardDisplay.Count} cards but only have {chosenCards.Count} unique cards!");
+            isRandomizing = false;
+            currentRandomizeCoroutine = null;
+            yield break;
+        }
+        
         for (int i = 0; i < cardDisplayContainer[counter].cardDisplay.Count; i++)
         {
             if (chosenCards.Count == 0)
