@@ -238,11 +238,63 @@ if (useSpriteAnimation && characterAnimator != null)
         
         directionToTarget = directionToTarget.normalized;
         
-        // Calculate attack position - enemy should jump TOWARDS player, stopping at attackDistance from player
-        // If enemy is to the right of player, direction will be negative (left), so attackPosition will be to the left of player
-        Vector3 attackPosition = targetPosition - (directionToTarget * attackDistance);
+        // Calculate attack position - enemy should jump TOWARDS player
+        // The attack position should be a point between enemy and player, at attackDistance from player
+        // If enemy is very close (< attackDistance), jump to 80% of the way to player
+        // If enemy is far away, jump to a point that's attackDistance away from player
+        float jumpDistance;
+        if (distanceToTarget <= attackDistance)
+        {
+            // Enemy is already close - jump 80% of the way to player
+            jumpDistance = distanceToTarget * 0.8f;
+        }
+        else
+        {
+            // Enemy is far - jump to a point that's attackDistance away from player
+            jumpDistance = distanceToTarget - attackDistance;
+        }
         
-        Debug.Log($"[EnemyJumpAttack] {gameObject.name}: Jumping from {startPosition} towards {targetPosition}. Direction: {directionToTarget}, Attack position: {attackPosition}");
+        // Ensure minimum jump distance
+        jumpDistance = Mathf.Max(0.5f, jumpDistance);
+        
+        // Calculate attack position from enemy's starting position
+        Vector3 attackPosition = startPosition + (directionToTarget * jumpDistance);
+        
+        // Make sure we don't overshoot the player
+        float finalDistanceToPlayer = Vector3.Distance(attackPosition, targetPosition);
+        if (finalDistanceToPlayer < attackDistance * 0.5f)
+        {
+            // If we're too close, adjust to be exactly attackDistance away
+            Vector3 directionFromAttackToPlayer = (targetPosition - attackPosition).normalized;
+            attackPosition = targetPosition - (directionFromAttackToPlayer * attackDistance);
+        }
+        
+        Debug.Log($"[EnemyJumpAttack] {gameObject.name}: Enemy at {startPosition}, Player at {targetPosition}, Distance: {distanceToTarget:F2}");
+        Debug.Log($"[EnemyJumpAttack] Jump distance: {jumpDistance:F2}, Attack position: {attackPosition}, Final distance to player: {Vector3.Distance(attackPosition, targetPosition):F2}");
+        
+        // Make enemy face the player before jumping (for 2D sprites, this might need sprite flipping instead)
+        // Note: For 2D sprites, you might want to flip the sprite scale instead of rotating
+        if (directionToTarget.magnitude > 0.01f)
+        {
+            // For 2D: Calculate which direction enemy should face
+            // If moving right (positive X), keep default rotation
+            // If moving left (negative X), flip sprite or rotate 180 degrees
+            float angle = Mathf.Atan2(directionToTarget.y, directionToTarget.x) * Mathf.Rad2Deg;
+            
+            // For 2D sprites, you might want to use this instead:
+            // SpriteRenderer spriteRenderer = GetComponent<SpriteRenderer>();
+            // if (spriteRenderer != null && directionToTarget.x < 0)
+            // {
+            //     spriteRenderer.flipX = true;
+            // }
+            // else if (spriteRenderer != null && directionToTarget.x > 0)
+            // {
+            //     spriteRenderer.flipX = false;
+            // }
+            
+            // For now, use rotation (this works for 3D or if sprite supports rotation)
+            transform.rotation = Quaternion.Euler(0, 0, angle);
+        }
         
         yield return StartCoroutine(JumpToPosition(startPosition, attackPosition, jumpToPlayerDuration));
         
