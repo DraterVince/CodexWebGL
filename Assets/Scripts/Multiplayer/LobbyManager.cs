@@ -843,10 +843,44 @@ if (currentPlayers < minPlayers)
     {
         Debug.Log($"[LobbyManager] Player joined: {newPlayer.NickName}");
       
+        // CRITICAL: Set cosmetic property for ALL players (including existing ones) when a new player joins
+        // This ensures all players have their cosmetic property set based on their position
+        UpdateCosmeticPropertiesForAllPlayers();
+      
    // Update UI
    if (PhotonNetwork.InRoom)
      {
     UpdateRoomUI();
+        }
+    }
+    
+    /// <summary>
+    /// Update cosmetic properties for all players based on their position
+    /// </summary>
+    private void UpdateCosmeticPropertiesForAllPlayers()
+    {
+        if (!PhotonNetwork.InRoom) return;
+        
+        // Sort players by actor number to maintain consistent order
+        Player[] sortedPlayers = PhotonNetwork.PlayerList;
+        System.Array.Sort(sortedPlayers, (a, b) => a.ActorNumber.CompareTo(b.ActorNumber));
+        
+        for (int i = 0; i < sortedPlayers.Length; i++)
+        {
+            Player player = sortedPlayers[i];
+            string assignedCosmetic = GetCosmeticForPosition(i);
+            
+            // Always set cosmetic property for local player to ensure it's correct
+            if (player.IsLocal)
+            {
+                ExitGames.Client.Photon.Hashtable props = new ExitGames.Client.Photon.Hashtable
+                {
+                    { COSMETIC_KEY, assignedCosmetic },
+                    { POSITION_KEY, i }
+                };
+                player.SetCustomProperties(props);
+                Debug.Log($"[LobbyManager] Set cosmetic property for local player {player.NickName}: {assignedCosmetic} (Position: {i})");
+            }
         }
     }
     
@@ -1123,16 +1157,24 @@ playerPendingKick = null;
     #region Cosmetic Helpers
     
     /// <summary>
-    /// Get the cosmetic ID for a specific player position
+    /// Get cosmetic ID for a given position (0 = first player, 1 = second player, etc.)
     /// </summary>
-    private string GetCosmeticForPosition(int position)
+    public string GetCosmeticForPosition(int position)
     {
         if (positionBasedCosmetics == null || position < 0 || position >= positionBasedCosmetics.Length)
  {
-     return "default";
+     Debug.LogWarning($"[LobbyManager] Invalid position {position}, returning 'Default'");
+     return "Default";
         }
         
-  return positionBasedCosmetics[position];
+  string cosmetic = positionBasedCosmetics[position];
+        if (string.IsNullOrWhiteSpace(cosmetic))
+        {
+            Debug.LogWarning($"[LobbyManager] Position {position} has empty cosmetic, returning 'Default'");
+            return "Default";
+        }
+        
+        return cosmetic;
     }
     
     /// <summary>

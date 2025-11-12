@@ -354,20 +354,30 @@ enabled = false;
         {
             Log($"Processing player: {player.NickName}, ActorNumber: {player.ActorNumber}");
          
+            // Log all custom properties for debugging
+            Log($"Player {player.NickName} custom properties:");
+            foreach (var prop in player.CustomProperties)
+            {
+                Log($"  - {prop.Key}: {prop.Value}");
+            }
+            
             object cosmeticObj;
             string cosmetic = "Default";
             
             if (player.CustomProperties.TryGetValue("multiplayer_cosmetic", out cosmeticObj))
             {
                 cosmetic = cosmeticObj.ToString();
+                Log($"Found 'multiplayer_cosmetic' property: {cosmetic}");
             }
             else if (player.CustomProperties.TryGetValue("cosmetic", out cosmeticObj))
             {
                 cosmetic = cosmeticObj.ToString();
+                Log($"Found 'cosmetic' property: {cosmetic}");
             }
             else if (player.CustomProperties.TryGetValue("current_cosmetic", out cosmeticObj))
             {
                 cosmetic = cosmeticObj.ToString();
+                Log($"Found 'current_cosmetic' property: {cosmetic}");
             }
             else
             {
@@ -380,6 +390,7 @@ enabled = false;
                 cosmetic = "Default";
             }
             
+            Log($"Loading character for {player.NickName} with cosmetic: '{cosmetic}'");
             LoadPlayerCharacter(player.ActorNumber, cosmetic);
         }
         
@@ -397,6 +408,13 @@ enabled = false;
         Log("===== LoadPlayerCharacter =====");
     Log($"Actor: {actorNumber}, Cosmetic: '{cosmeticData}'");
   
+        // CRITICAL: Check if character already exists for this actor to prevent duplicates
+        if (playerCharacters.ContainsKey(actorNumber) && playerCharacters[actorNumber] != null)
+        {
+            LogWarning($"Character for actor {actorNumber} already exists! Skipping duplicate instantiation.");
+            return;
+        }
+        
         Player player = PhotonNetwork.CurrentRoom.GetPlayer(actorNumber);
         if (player == null)
         {
@@ -417,7 +435,7 @@ enabled = false;
         
       if (characterPrefab != null)
         {
-            Log($"Creating character instance for {player.NickName}");
+            Log($"Creating character instance for {player.NickName} with cosmetic '{cosmeticData}'");
        
             try
    {
@@ -431,10 +449,15 @@ enabled = false;
           {
               LogWarning($"Character prefab for {player.NickName} doesn't have an Animator component. Attack/Idle animations may not work.");
           }
+          else
+          {
+              Log($"Character has Animator component: {animator.name}");
+          }
        
+          // CRITICAL: Store character before activating to prevent race conditions
           playerCharacters[actorNumber] = character;
        
-           Log($"? Character created and stored for actor {actorNumber}");
+           Log($"✓ Character created and stored for actor {actorNumber}: {character.name}");
         }
          catch (System.Exception ex)
          {
@@ -443,7 +466,7 @@ enabled = false;
         }
         else
         {
-            LogError($"CRITICAL: Could not load character prefab for cosmetic: '{cosmeticData}'");
+            LogError($"CRITICAL: Could not load character prefab for cosmetic: '{cosmeticData}'. Check if prefab exists in Resources/Characters/{cosmeticData}");
         }
     }
     
@@ -455,34 +478,56 @@ enabled = false;
    GameObject prefab = null;
     
         // Try exact match
-      prefab = Resources.Load<GameObject>($"Characters/{cosmeticData}");
+        string exactPath = $"Characters/{cosmeticData}";
+        Log($"Attempting to load: '{exactPath}'");
+      prefab = Resources.Load<GameObject>(exactPath);
 if (prefab != null)
         {
-            Log($"? Found prefab with exact match: Characters/{cosmeticData}");
+            Log($"✓ Found prefab with exact match: {exactPath}");
             return prefab;
+        }
+        else
+        {
+            LogWarning($"✗ Prefab not found at: {exactPath}");
         }
         
   // Try capitalized first letter
         if (!string.IsNullOrEmpty(cosmeticData) && cosmeticData.Length > 0)
         {
         string capitalizedPath = $"Characters/{char.ToUpper(cosmeticData[0])}{cosmeticData.Substring(1)}";
-        prefab = Resources.Load<GameObject>(capitalizedPath);
+            if (capitalizedPath != exactPath) // Only try if different
+            {
+                Log($"Attempting to load: '{capitalizedPath}'");
+                prefab = Resources.Load<GameObject>(capitalizedPath);
      
    if (prefab != null)
           {
-      Log($"? Found prefab with capitalization: {capitalizedPath}");
+      Log($"✓ Found prefab with capitalization: {capitalizedPath}");
                 return prefab;
+            }
+                else
+                {
+                    LogWarning($"✗ Prefab not found at: {capitalizedPath}");
+                }
             }
    }
         
       // Try all lowercase
         string lowercasePath = $"Characters/{cosmeticData.ToLower()}";
-        prefab = Resources.Load<GameObject>(lowercasePath);
+        if (lowercasePath != exactPath && lowercasePath != $"Characters/{char.ToUpper(cosmeticData[0])}{cosmeticData.Substring(1)}") // Only try if different
+        {
+            Log($"Attempting to load: '{lowercasePath}'");
+            prefab = Resources.Load<GameObject>(lowercasePath);
       
         if (prefab != null)
     {
-        Log($"? Found prefab with lowercase: {lowercasePath}");
+        Log($"✓ Found prefab with lowercase: {lowercasePath}");
          return prefab;
+        }
+            else
+            {
+                LogWarning($"✗ Prefab not found at: {lowercasePath}");
+            }
         }
         
         // Try "Default" as ultimate fallback
@@ -491,13 +536,14 @@ if (prefab != null)
  
         if (prefab != null)
         {
-            Log("? Using Default prefab as fallback");
+            Log("✓ Using Default prefab as fallback");
     return prefab;
         }
         else
         {
-   LogError("? CRITICAL: Even Default prefab not found!");
+   LogError("✗ CRITICAL: Even Default prefab not found!");
  LogError("Make sure you have a prefab at: Assets/Resources/Characters/Default.prefab");
+  LogError("Resources.Load path format: 'Characters/Default' (no .prefab extension, no Assets/Resources/ prefix)");
   }
      
         return null;

@@ -65,29 +65,94 @@ public class CodexMultiplayerIntegration : MonoBehaviourPunCallbacks
     {
         base.OnJoinedRoom();
   
+        // CRITICAL: Set cosmetic property based on player position when joining room
+        // Calculate player position (0 = first player, 1 = second player, etc.)
+        Player[] sortedPlayers = PhotonNetwork.PlayerList;
+        System.Array.Sort(sortedPlayers, (a, b) => a.ActorNumber.CompareTo(b.ActorNumber));
+        
+        int playerPosition = -1;
+        for (int i = 0; i < sortedPlayers.Length; i++)
+        {
+            if (sortedPlayers[i].ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber)
+            {
+                playerPosition = i;
+                break;
+            }
+        }
+        
+        // Get cosmetic based on position
+        // First, check if cosmetic is already set (might have been set by LobbyManager)
+        object existingCosmeticObj;
+        string multiplayerCosmetic = "Default";
+        bool hasExistingCosmetic = false;
+        
+        if (PhotonNetwork.LocalPlayer.CustomProperties.TryGetValue("multiplayer_cosmetic", out existingCosmeticObj))
+        {
+            string existingCosmetic = existingCosmeticObj.ToString();
+            if (!string.IsNullOrWhiteSpace(existingCosmetic))
+            {
+                multiplayerCosmetic = existingCosmetic;
+                hasExistingCosmetic = true;
+                Debug.Log($"[CodexMultiplayerIntegration] Found existing cosmetic property: {multiplayerCosmetic} (Position: {playerPosition})");
+            }
+        }
+        
+        // If no existing cosmetic, calculate based on position
+        if (!hasExistingCosmetic && playerPosition >= 0)
+        {
+            // Try to get cosmetic from LobbyManager if it exists (it should have the correct array)
+            LobbyManager lobbyManager = FindObjectOfType<LobbyManager>();
+            if (lobbyManager != null)
+            {
+                // Use LobbyManager's GetCosmeticForPosition method (now public)
+                multiplayerCosmetic = lobbyManager.GetCosmeticForPosition(playerPosition);
+                Debug.Log($"[CodexMultiplayerIntegration] Got cosmetic from LobbyManager: {multiplayerCosmetic} (Position: {playerPosition})");
+            }
+            else
+            {
+                // Fallback to default cosmetics if LobbyManager is not available
+                string[] defaultCosmetics = { "Knight", "Ronin", "Daimyo", "King", "DemonGirl" };
+                if (playerPosition >= 0 && playerPosition < defaultCosmetics.Length)
+                {
+                    multiplayerCosmetic = defaultCosmetics[playerPosition];
+                    Debug.Log($"[CodexMultiplayerIntegration] LobbyManager not found, using default cosmetic: {multiplayerCosmetic} (Position: {playerPosition})");
+                }
+            }
+        }
+        
+        // Ensure cosmetic is not empty or "default" (lowercase)
+        if (string.IsNullOrWhiteSpace(multiplayerCosmetic) || multiplayerCosmetic.ToLower() == "default")
+        {
+            multiplayerCosmetic = "Default";
+        }
+        
         // Set player properties from your existing PlayerData
      if (playerDataManager != null && playerDataManager.GetCurrentPlayerData() != null)
  {
    var playerData = playerDataManager.GetCurrentPlayerData();
-   
-      // Get multiplayer-assigned cosmetic (set by LobbyManager based on position)
-            object multiplayerCosmeticObj;
-      string multiplayerCosmetic = "default";
-            if (PhotonNetwork.LocalPlayer.CustomProperties.TryGetValue("multiplayer_cosmetic", out multiplayerCosmeticObj))
-     {
-       multiplayerCosmetic = multiplayerCosmeticObj.ToString();
-     }
      
    ExitGames.Client.Photon.Hashtable playerProps = new ExitGames.Client.Photon.Hashtable
      {
          { "username", playerData.username },
       { "levels_unlocked", playerData.levels_unlocked },
-    { "multiplayer_cosmetic", multiplayerCosmetic }, // Use position-based cosmetic for multiplayer
+    { "multiplayer_cosmetic", multiplayerCosmetic }, // Set position-based cosmetic
               { "IsReady", false }
     };
        
             PhotonNetwork.LocalPlayer.SetCustomProperties(playerProps);
-     Debug.Log($"Player data synced to Photon network with cosmetic: {multiplayerCosmetic}");
+     Debug.Log($"[CodexMultiplayerIntegration] Player data synced to Photon network with cosmetic: {multiplayerCosmetic} (Position: {playerPosition})");
+        }
+        else
+        {
+            // Even if player data manager is not available, set the cosmetic property
+            ExitGames.Client.Photon.Hashtable playerProps = new ExitGames.Client.Photon.Hashtable
+            {
+                { "multiplayer_cosmetic", multiplayerCosmetic },
+                { "IsReady", false }
+            };
+            
+            PhotonNetwork.LocalPlayer.SetCustomProperties(playerProps);
+            Debug.Log($"[CodexMultiplayerIntegration] Cosmetic property set to: {multiplayerCosmetic} (Position: {playerPosition})");
         }
 
         // Initialize turn system if Master Client

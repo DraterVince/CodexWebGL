@@ -104,7 +104,7 @@ MonoBehaviour:
   jumpBackDuration: 0.5
   jumpHeight: 2
   attackDistance: 1.5
-  attackPauseDuration: 0.2
+  attackPauseDuration: 2
   jumpCurve:
     serializedVersion: 2
     m_Curve:
@@ -137,6 +137,7 @@ MonoBehaviour:
   attackAnimationState: Attack
   attackEffectPrefab: {fileID: 0}
   attackEffectOffset: {x: 0, y: 0, z: 0}
+  returnToStartPositionAfterAttack: 1
 --- !u!95 &2688319540005871362
 Animator:
   serializedVersion: 5
