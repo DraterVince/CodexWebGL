@@ -709,23 +709,6 @@ if (prefab != null)
         
         Log($"Sliding in new character for actor {newActorNumber} from {offScreenRight}");
         
-        // Update PlayCardButton reference for attack animations
-        if (playCardButton != null)
-        {
-            playCardButton.playerCharacter = currentCharacterInstance;
-            // Try to get CharacterJumpAttack component
-            CharacterJumpAttack jumpAttack = currentCharacterInstance.GetComponent<CharacterJumpAttack>();
-            if (jumpAttack != null)
-            {
-                playCardButton.playerJumpAttack = jumpAttack;
-                Log($"Updated PlayCardButton references for actor {newActorNumber}");
-            }
-            else
-            {
-                LogWarning($"Character for actor {newActorNumber} has no CharacterJumpAttack component");
-            }
-        }
-        
         Vector3 slideInStartPos = offScreenRight;
         Vector3 slideInTargetPos = characterDisplayPosition.position;
         
@@ -752,6 +735,24 @@ if (prefab != null)
         {
             currentCharacterInstance.transform.position = slideInTargetPos;
             Log($"New character slid in to {slideInTargetPos}");
+            
+            // CRITICAL: Update PlayCardButton reference AFTER character reaches final position
+            // This ensures the enemy always attacks the correct character position
+            if (playCardButton != null)
+            {
+                playCardButton.playerCharacter = currentCharacterInstance;
+                // Try to get CharacterJumpAttack component
+                CharacterJumpAttack jumpAttack = currentCharacterInstance.GetComponent<CharacterJumpAttack>();
+                if (jumpAttack != null)
+                {
+                    playCardButton.playerJumpAttack = jumpAttack;
+                    Log($"Updated PlayCardButton references for actor {newActorNumber} (character at final position)");
+                }
+                else
+                {
+                    LogWarning($"Character for actor {newActorNumber} has no CharacterJumpAttack component");
+                }
+            }
             
             // Play idle animation after sliding in
             PlayCharacterAnimation(newActorNumber, idleAnimationTrigger);
@@ -1310,15 +1311,44 @@ GameObject currentEnemy = playCardButton.enemyManager.enemies[playCardButton.ene
           hasAnimation = true;
  delayHealthUIUpdate = true;
      
-  // Trigger enemy attack animation
-    enemyJumpAttack.PerformJumpAttack(playCardButton.playerCharacter.transform, () => {
-       // Damage applied when animation hits
-        DamageSharedHealth(1f);
-     
-  // Force UI update immediately after damage
-     ForceUpdateHealthUI();
-     delayHealthUIUpdate = false;
-    });
+          // CRITICAL: Ensure player character is valid and in the correct position
+            if (playCardButton.playerCharacter == null)
+            {
+                LogError("Cannot trigger enemy attack - playerCharacter is NULL!");
+                hasAnimation = false;
+            }
+            else
+            {
+                // Update enemy's original position before attack to ensure correct return position
+                enemyJumpAttack.UpdateOriginalPosition();
+                
+                // CRITICAL: Use currentCharacterInstance if available, otherwise use playCardButton reference
+                // This ensures we're always using the correct, currently displayed character
+                GameObject targetCharacter = currentCharacterInstance != null ? currentCharacterInstance : playCardButton.playerCharacter;
+                
+                if (targetCharacter == null)
+                {
+                    LogError("Cannot trigger enemy attack - no valid character reference!");
+                    hasAnimation = false;
+                }
+                else
+                {
+                    // Get player character position - prefer characterDisplayPosition if character is active
+                    Vector3 playerPosition = targetCharacter.transform.position;
+                    Log($"Enemy attacking player at position: {playerPosition} (Character: {targetCharacter.name})");
+                    Log($"Enemy position: {currentEnemy.transform.position}, Distance: {Vector3.Distance(currentEnemy.transform.position, playerPosition)}");
+                    
+                    // Trigger enemy attack animation
+                    enemyJumpAttack.PerformJumpAttack(playerPosition, () => {
+                        // Damage applied when animation hits
+                        DamageSharedHealth(1f);
+                        
+                        // Force UI update immediately after damage
+                        ForceUpdateHealthUI();
+                        delayHealthUIUpdate = false;
+                    });
+                }
+            }
      }
      }
   
@@ -1349,9 +1379,27 @@ DamageSharedHealth(1f);
          
      if (enemyJumpAttack != null)
   {
-   enemyJumpAttack.PerformJumpAttack(playCardButton.playerCharacter.transform, () => {
-         Log("Non-master: Enemy attack animation complete (visual only)");
-     });
+            // CRITICAL: Ensure player character is valid before attacking
+            // Use currentCharacterInstance if available, otherwise use playCardButton reference
+            GameObject targetCharacter = currentCharacterInstance != null ? currentCharacterInstance : playCardButton.playerCharacter;
+            
+            if (targetCharacter != null)
+            {
+                // Update enemy's original position before attack
+                enemyJumpAttack.UpdateOriginalPosition();
+                
+                // Get player character position
+                Vector3 playerPosition = targetCharacter.transform.position;
+                Log($"Non-master: Enemy attacking player at position: {playerPosition} (Character: {targetCharacter.name})");
+                
+                enemyJumpAttack.PerformJumpAttack(playerPosition, () => {
+                    Log("Non-master: Enemy attack animation complete (visual only)");
+                });
+            }
+            else
+            {
+                LogWarning("Cannot trigger enemy attack on non-master - no valid character reference!");
+            }
        }
      }
     

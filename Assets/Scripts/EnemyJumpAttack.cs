@@ -35,7 +35,8 @@ public float attackDistance = 1.5f;
      transform.localScale = characterScale;
       }
         
-  originalPosition = transform.position;
+        // Initialize original position - this will be updated before each attack
+        originalPosition = transform.position;
         
         if (characterAnimator == null && useSpriteAnimation)
         {
@@ -64,6 +65,15 @@ if (useSpriteAnimation && characterAnimator != null)
  characterAnimator.speed = 1f;
    PlayIdleAnimation();
    }
+        }
+    }
+    
+    void OnEnable()
+    {
+        // Update original position when enemy is enabled (in case it was repositioned)
+        if (!isAnimating)
+        {
+            originalPosition = transform.position;
         }
     }
 
@@ -194,8 +204,45 @@ if (useSpriteAnimation && characterAnimator != null)
         // Update original position before attack to ensure we return to the correct position
         originalPosition = transform.position;
         Vector3 startPosition = originalPosition;
-        Vector3 directionToTarget = (targetPosition - startPosition).normalized;
-   Vector3 attackPosition = targetPosition - (directionToTarget * attackDistance);
+        
+        // Calculate direction from enemy to player
+        Vector3 directionToTarget = (targetPosition - startPosition);
+        
+        // Check if distance is valid (avoid division by zero)
+        float distanceToTarget = directionToTarget.magnitude;
+        if (distanceToTarget < 0.01f)
+        {
+            Debug.LogWarning($"[EnemyJumpAttack] {gameObject.name}: Target position is too close to enemy position! Enemy: {startPosition}, Target: {targetPosition}");
+            // Just play attack animation in place
+            if (useSpriteAnimation && characterAnimator != null && characterAnimator.runtimeAnimatorController != null)
+            {
+                if (useAttackTrigger && !string.IsNullOrEmpty(attackAnimationTrigger))
+                {
+                    if (HasParameter(characterAnimator, attackAnimationTrigger))
+                    {
+                        characterAnimator.Update(0f);
+                        characterAnimator.ResetTrigger(attackAnimationTrigger);
+                        characterAnimator.SetTrigger(attackAnimationTrigger);
+                        characterAnimator.Update(0f);
+                        characterAnimator.Update(0.001f);
+                    }
+                }
+            }
+            
+            yield return new WaitForSeconds(0.05f);
+            if (onAttackHit != null) { onAttackHit.Invoke(); }
+            yield return new WaitForSeconds(attackPauseDuration);
+            isAnimating = false;
+            yield break;
+        }
+        
+        directionToTarget = directionToTarget.normalized;
+        
+        // Calculate attack position - enemy should jump TOWARDS player, stopping at attackDistance from player
+        // If enemy is to the right of player, direction will be negative (left), so attackPosition will be to the left of player
+        Vector3 attackPosition = targetPosition - (directionToTarget * attackDistance);
+        
+        Debug.Log($"[EnemyJumpAttack] {gameObject.name}: Jumping from {startPosition} towards {targetPosition}. Direction: {directionToTarget}, Attack position: {attackPosition}");
         
         yield return StartCoroutine(JumpToPosition(startPosition, attackPosition, jumpToPlayerDuration));
         
