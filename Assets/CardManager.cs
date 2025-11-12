@@ -184,25 +184,54 @@ public class CardManager : MonoBehaviour
     {
         chosenCards.Clear();
 
+        // CRITICAL: Validate counter BEFORE accessing arrays
         if (counter < 0 || counter >= cardDisplayContainer.Count)
         {
-            Debug.LogWarning($"CardManager counter {counter} is out of range. CardDisplayContainer count: {cardDisplayContainer.Count}");
+            Debug.LogWarning($"[CardManager] ResetCards: Counter {counter} is out of range. CardDisplayContainer count: {cardDisplayContainer.Count}. Clamping counter to valid range.");
+            // Clamp counter to valid range to prevent errors
+            counter = Mathf.Clamp(counter, 0, Mathf.Max(0, cardDisplayContainer.Count - 1));
+            if (cardDisplayContainer.Count == 0)
+            {
+                Debug.LogError("[CardManager] ResetCards: No card display containers available! Cannot reset cards.");
+                return;
+            }
+        }
+        
+        // Double-check bounds before accessing
+        if (counter < 0 || counter >= cardDisplayContainer.Count || cardDisplayContainer[counter] == null)
+        {
+            Debug.LogError($"[CardManager] ResetCards: Cannot access cardDisplayContainer[{counter}]. Counter: {counter}, Count: {cardDisplayContainer.Count}");
             return;
         }
         
         // Reset cards in the display container (grid area)
-        for (int i = 0; i < cardDisplayContainer[counter].cardDisplay.Count; i++)
+        int cardCount = cardDisplayContainer[counter].cardDisplay.Count;
+        for (int i = 0; i < cardCount; i++)
         {
+            // Validate card display object exists
+            if (cardDisplayContainer[counter].cardDisplay[i] == null)
+            {
+                Debug.LogWarning($"[CardManager] ResetCards: Card display {i} is null at counter {counter}! Skipping...");
+                continue;
+            }
+            
             // Clear card data to prevent stale values
             cardDisplayContainer[counter].cardDisplay[i].cardName = "";
             
             // Clear text display
             try
             {
-                var textComponent = cardDisplayContainer[counter].cardDisplay[i].transform.GetChild(0)?.GetComponentInChildren<TextMeshProUGUI>();
-                if (textComponent != null)
+                if (cardDisplayContainer[counter].cardDisplay[i].transform.childCount > 0)
                 {
-                    textComponent.text = "";
+                    Transform child = cardDisplayContainer[counter].cardDisplay[i].transform.GetChild(0);
+                    if (child != null)
+                    {
+                        TextMeshProUGUI textComponent = child.GetComponentInChildren<TextMeshProUGUI>();
+                        if (textComponent != null)
+                        {
+                            textComponent.text = "";
+                        }
+                    }
                 }
             }
             catch (System.Exception ex)
@@ -211,7 +240,10 @@ public class CardManager : MonoBehaviour
             }
             
             cardDisplayContainer[counter].cardDisplay[i].gameObject.SetActive(false);
-            cardDisplayContainer[counter].cardDisplay[i].gameObject.transform.SetParent(grid.transform);
+            if (grid != null)
+            {
+                cardDisplayContainer[counter].cardDisplay[i].gameObject.transform.SetParent(grid.transform);
+            }
             cardDisplayContainer[counter].cardDisplay[i].gameObject.transform.localScale = Vector3.one;
         }
 

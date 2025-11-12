@@ -1282,13 +1282,8 @@ Log($"RPC_SyncCardCounter - Setting counter to {newCounter}");
         {
           // CORRECT ANSWER - Trigger player attack animation on all clients
           
-          // Play attack animation trigger on current character
-          PlayCurrentCharacterAttack();
-          
   bool hasAnimation = false;
    if (playCardButton != null && playCardButton.useJumpAttackAnimation && 
-   playCardButton.playerCharacter != null && 
-  playCardButton.playerJumpAttack != null &&
     playCardButton.enemyManager != null &&
    playCardButton.enemyManager.counter < playCardButton.enemyManager.enemies.Count)
        {
@@ -1296,27 +1291,65 @@ Log($"RPC_SyncCardCounter - Setting counter to {newCounter}");
         
  if (currentEnemy != null)
         {
-       hasAnimation = true;
+           // CRITICAL: Use currentCharacterInstance instead of playCardButton.playerCharacter
+           // This ensures we're using the currently displayed character, not a stale reference
+           GameObject characterToUse = currentCharacterInstance != null ? currentCharacterInstance : playCardButton.playerCharacter;
            
-    // Trigger player jump attack animation on ALL clients
-           playCardButton.playerJumpAttack.PerformJumpAttack(currentEnemy.transform, () => {
-         // Master Client applies damage
-       if (PhotonNetwork.IsMasterClient)
-       {
-        playCardButton.EnemyTakeDamage(1f);
-       
-       // Sync enemy health to all clients
-    int enemyIndex = playCardButton.enemyManager.counter;
-           float newHealth = playCardButton.enemyHealthAmount[enemyIndex];
-    photonView.RPC("RPC_SyncEnemyHealth", RpcTarget.All, enemyIndex, newHealth);
-       
-   Log("Player attack animation complete - enemy damaged");
-     }
-       else
- {
-      Log("Non-master: Player attack animation complete (visual only)");
-      }
-  });
+           if (characterToUse != null)
+           {
+               CharacterJumpAttack jumpAttack = characterToUse.GetComponent<CharacterJumpAttack>();
+               if (jumpAttack == null)
+               {
+                   jumpAttack = characterToUse.GetComponentInChildren<CharacterJumpAttack>();
+               }
+               
+               if (jumpAttack != null)
+               {
+                   hasAnimation = true;
+                   
+                   // Update playCardButton reference for consistency
+                   playCardButton.playerCharacter = characterToUse;
+                   playCardButton.playerJumpAttack = jumpAttack;
+                   
+                   Log($"Triggering player jump attack on {characterToUse.name} targeting enemy {currentEnemy.name}");
+                   
+                   // Trigger player jump attack animation on ALL clients
+                   jumpAttack.PerformJumpAttack(currentEnemy.transform, () => {
+                       // Master Client applies damage
+                       if (PhotonNetwork.IsMasterClient)
+                       {
+                           // Validate enemy index before accessing array
+                           int enemyIndex = playCardButton.enemyManager.counter;
+                           if (enemyIndex >= 0 && enemyIndex < playCardButton.enemyHealthAmount.Count)
+                           {
+                               playCardButton.EnemyTakeDamage(1f);
+                               
+                               // Sync enemy health to all clients
+                               float newHealth = playCardButton.enemyHealthAmount[enemyIndex];
+                               photonView.RPC("RPC_SyncEnemyHealth", RpcTarget.All, enemyIndex, newHealth);
+                               
+                               Log("Player attack animation complete - enemy damaged");
+                           }
+                           else
+                           {
+                               LogError($"Invalid enemy index {enemyIndex} when trying to apply damage! Health array count: {playCardButton.enemyHealthAmount.Count}");
+                           }
+                       }
+                       else
+                       {
+                           Log("Non-master: Player attack animation complete (visual only)");
+                       }
+                   });
+               }
+               else
+               {
+                   LogWarning($"Character {characterToUse.name} has no CharacterJumpAttack component - cannot perform jump attack");
+               }
+           }
+           else
+           {
+               LogError("Cannot perform jump attack - no character reference available!");
+           }
     }
      }
      

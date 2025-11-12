@@ -280,7 +280,22 @@ if (useSpriteAnimation && characterAnimator != null)
         // CRITICAL: Always reset rotation to originalRotation to prevent unwanted rotations
         transform.rotation = originalRotation;
         
-        if (directionToTarget.magnitude > 0.01f)
+        // Check if we're in multiplayer mode - only flip sprites in multiplayer
+        // In singleplayer, enemies typically don't need to flip sprites
+        bool isMultiplayer = false;
+        try
+        {
+            isMultiplayer = Photon.Pun.PhotonNetwork.IsConnected && Photon.Pun.PhotonNetwork.InRoom;
+        }
+        catch
+        {
+            // Photon not available - assume singleplayer
+            isMultiplayer = false;
+        }
+        
+        // Only flip sprite in multiplayer mode (or if explicitly enabled)
+        // In singleplayer, enemies usually face one direction
+        if (isMultiplayer && directionToTarget.magnitude > 0.01f)
         {
             // Try to get SpriteRenderer for 2D sprite flipping
             SpriteRenderer spriteRenderer = GetComponent<SpriteRenderer>();
@@ -303,6 +318,11 @@ if (useSpriteAnimation && characterAnimator != null)
                 // For 3D, we might want to rotate to face the player, but for 2D side-scrolling, we don't want rotation
                 Debug.Log($"[EnemyJumpAttack] {gameObject.name}: No SpriteRenderer found - keeping original rotation");
             }
+        }
+        else if (!isMultiplayer)
+        {
+            // Singleplayer mode - don't flip sprites, just keep original rotation
+            Debug.Log($"[EnemyJumpAttack] {gameObject.name}: Singleplayer mode - sprite flipping disabled");
         }
         
         yield return StartCoroutine(JumpToPosition(startPosition, attackPosition, jumpToPlayerDuration));
