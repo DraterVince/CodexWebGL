@@ -32,6 +32,8 @@ public class SharedMultiplayerGameManager : MonoBehaviourPunCallbacks
     [SerializeField] private Vector3 offScreenLeft = new Vector3(-15f, 0f, 0f);
     [SerializeField] private Vector3 offScreenRight = new Vector3(15f, 0f, 0f);
     [SerializeField] private string idleAnimationTrigger = "Idle";
+    [SerializeField] private string idleAnimationStateName = "Idle"; // Fallback: use state name if trigger doesn't exist
+    [SerializeField] private bool useIdleTrigger = false; // Set to true if using trigger, false if using state name
     [SerializeField] private string attackAnimationTrigger = "Attack";
   
     [Header("Turn Display")]
@@ -363,31 +365,60 @@ enabled = false;
             
             object cosmeticObj;
             string cosmetic = "Default";
+            bool hasCosmeticProperty = false;
             
             if (player.CustomProperties.TryGetValue("multiplayer_cosmetic", out cosmeticObj))
             {
                 cosmetic = cosmeticObj.ToString();
+                hasCosmeticProperty = true;
                 Log($"Found 'multiplayer_cosmetic' property: {cosmetic}");
             }
             else if (player.CustomProperties.TryGetValue("cosmetic", out cosmeticObj))
             {
                 cosmetic = cosmeticObj.ToString();
+                hasCosmeticProperty = true;
                 Log($"Found 'cosmetic' property: {cosmetic}");
             }
             else if (player.CustomProperties.TryGetValue("current_cosmetic", out cosmeticObj))
             {
                 cosmetic = cosmeticObj.ToString();
+                hasCosmeticProperty = true;
                 Log($"Found 'current_cosmetic' property: {cosmetic}");
             }
             else
             {
-                LogWarning($"Player {player.NickName} has no cosmetic property! Using Default");
+                LogWarning($"Player {player.NickName} has no cosmetic property! Will calculate based on position.");
             }
         
-            if (string.IsNullOrWhiteSpace(cosmetic))
+            // If no cosmetic property found, calculate based on player position
+            if (!hasCosmeticProperty || string.IsNullOrWhiteSpace(cosmetic) || cosmetic.ToLower() == "default")
             {
-                LogWarning($"Player {player.NickName} has empty cosmetic! Using Default");
-                cosmetic = "Default";
+                // Calculate player position (0 = first player, 1 = second player, etc.)
+                Player[] sortedPlayers = PhotonNetwork.PlayerList;
+                System.Array.Sort(sortedPlayers, (a, b) => a.ActorNumber.CompareTo(b.ActorNumber));
+                
+                int playerPosition = -1;
+                for (int i = 0; i < sortedPlayers.Length; i++)
+                {
+                    if (sortedPlayers[i].ActorNumber == player.ActorNumber)
+                    {
+                        playerPosition = i;
+                        break;
+                    }
+                }
+                
+                // Use default cosmetics array (matches LobbyManager's positionBasedCosmetics)
+                string[] defaultCosmetics = { "Knight", "Ronin", "Daimyo", "King", "DemonGirl" };
+                if (playerPosition >= 0 && playerPosition < defaultCosmetics.Length)
+                {
+                    cosmetic = defaultCosmetics[playerPosition];
+                    LogWarning($"Player {player.NickName} has no cosmetic property - assigned '{cosmetic}' based on position {playerPosition}");
+                }
+                else
+                {
+                    cosmetic = "Default";
+                    LogWarning($"Player {player.NickName} has no cosmetic property and invalid position {playerPosition} - using Default");
+                }
             }
             
             Log($"Loading character for {player.NickName} with cosmetic: '{cosmetic}'");
@@ -623,7 +654,8 @@ if (prefab != null)
         }
        
         // Play idle animation
-        PlayCharacterAnimation(actorNumber, idleAnimationTrigger);
+            // Play idle animation - will use CharacterJumpAttack if available, otherwise try trigger/state
+            PlayCharacterAnimation(actorNumber, useIdleTrigger ? idleAnimationTrigger : idleAnimationStateName);
        
     Log($"? Character {actorNumber} shown at position {characterDisplayPosition.position}");
   }
@@ -650,7 +682,7 @@ if (prefab != null)
     /// <summary>
     /// Play animation on character by actor number
     /// </summary>
-    private void PlayCharacterAnimation(int actorNumber, string triggerName)
+    private void PlayCharacterAnimation(int actorNumber, string triggerOrStateName)
     {
         if (!playerCharacters.ContainsKey(actorNumber))
         {
@@ -674,30 +706,62 @@ if (prefab != null)
         
         if (animator != null && animator.runtimeAnimatorController != null)
         {
+            // First, try to use CharacterJumpAttack's PlayIdleAnimation if available and we're playing idle
+            // CharacterJumpAttack uses state names (not triggers) for idle animations
+            CharacterJumpAttack jumpAttack = character.GetComponent<CharacterJumpAttack>();
+            if (jumpAttack != null && (triggerOrStateName == idleAnimationTrigger || triggerOrStateName == idleAnimationStateName))
+            {
+                // Use CharacterJumpAttack's built-in idle animation method (uses state names)
+                jumpAttack.PlayIdleAnimation();
+                Log($"Playing idle animation via CharacterJumpAttack on character {actorNumber}");
+                return;
+            }
+            
             // Check if trigger exists in animator
             bool hasTrigger = false;
+            
+            // Check for trigger parameter
             foreach (AnimatorControllerParameter param in animator.parameters)
             {
-                if (param.name == triggerName && param.type == AnimatorControllerParameterType.Trigger)
+                if (param.name == triggerOrStateName && param.type == AnimatorControllerParameterType.Trigger)
                 {
                     hasTrigger = true;
                     break;
                 }
             }
             
-            if (hasTrigger)
+            // If trigger exists and we want to use it, use trigger
+            if (hasTrigger && useIdleTrigger)
             {
-                animator.SetTrigger(triggerName);
-                Log($"Playing animation '{triggerName}' on character {actorNumber}");
+                animator.SetTrigger(triggerOrStateName);
+                Log($"Playing animation trigger '{triggerOrStateName}' on character {actorNumber}");
             }
             else
             {
-                LogWarning($"Character {actorNumber} has Animator but no '{triggerName}' trigger parameter. Available parameters: {string.Join(", ", System.Array.ConvertAll(animator.parameters, p => p.name))}");
+                // Use state name instead of trigger (default for idle animation)
+                try
+                {
+                    animator.Play(triggerOrStateName, 0, 0f);
+                    Log($"Playing animation state '{triggerOrStateName}' on character {actorNumber}");
+                }
+                catch
+                {
+                    // State doesn't exist - log warning with available parameters
+                    string availableParams = string.Join(", ", System.Array.ConvertAll(animator.parameters, p => p.name));
+                    LogWarning($"Character {actorNumber} has Animator but cannot play state '{triggerOrStateName}'. Available parameters: {availableParams}");
+                    
+                    // Final fallback: try to use CharacterJumpAttack if available (even if name doesn't match exactly)
+                    if (jumpAttack != null && triggerOrStateName.Contains("Idle"))
+                    {
+                        jumpAttack.PlayIdleAnimation();
+                        Log($"Playing idle animation via CharacterJumpAttack fallback on character {actorNumber}");
+                    }
+                }
             }
         }
         else
         {
-            LogWarning($"Character {actorNumber} has no Animator component or Animator Controller - animation '{triggerName}' cannot play");
+            LogWarning($"Character {actorNumber} has no Animator component or Animator Controller - animation '{triggerOrStateName}' cannot play");
         }
     }
     
@@ -860,7 +924,8 @@ if (prefab != null)
             }
             
             // Play idle animation after sliding in
-            PlayCharacterAnimation(newActorNumber, idleAnimationTrigger);
+                // Play idle animation - will use CharacterJumpAttack if available, otherwise try trigger/state
+                PlayCharacterAnimation(newActorNumber, useIdleTrigger ? idleAnimationTrigger : idleAnimationStateName);
             Log($"Idle animation triggered for actor {newActorNumber}");
         }
         

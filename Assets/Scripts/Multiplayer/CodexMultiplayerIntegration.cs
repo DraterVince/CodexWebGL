@@ -120,10 +120,29 @@ public class CodexMultiplayerIntegration : MonoBehaviourPunCallbacks
             }
         }
         
-        // Ensure cosmetic is not empty or "default" (lowercase)
-        if (string.IsNullOrWhiteSpace(multiplayerCosmetic) || multiplayerCosmetic.ToLower() == "default")
+        // CRITICAL: Always set cosmetic based on position, even if we don't have an existing one
+        // This ensures all players get their cosmetic property set correctly
+        if (!hasExistingCosmetic || string.IsNullOrWhiteSpace(multiplayerCosmetic) || multiplayerCosmetic.ToLower() == "default")
         {
-            multiplayerCosmetic = "Default";
+            // Use default cosmetics array as fallback (matches LobbyManager's positionBasedCosmetics)
+            string[] defaultCosmetics = { "Knight", "Ronin", "Daimyo", "King", "DemonGirl" };
+            if (playerPosition >= 0 && playerPosition < defaultCosmetics.Length)
+            {
+                multiplayerCosmetic = defaultCosmetics[playerPosition];
+                Debug.Log($"[CodexMultiplayerIntegration] Setting cosmetic based on position: {multiplayerCosmetic} (Position: {playerPosition})");
+            }
+            else if (playerPosition >= 0)
+            {
+                // If more than 5 players, use default
+                multiplayerCosmetic = "Default";
+                Debug.Log($"[CodexMultiplayerIntegration] Position {playerPosition} out of range, using Default");
+            }
+            else
+            {
+                // Invalid position
+                multiplayerCosmetic = "Default";
+                Debug.LogWarning($"[CodexMultiplayerIntegration] Invalid player position: {playerPosition}, using Default");
+            }
         }
         
         // Set player properties from your existing PlayerData
@@ -136,6 +155,7 @@ public class CodexMultiplayerIntegration : MonoBehaviourPunCallbacks
          { "username", playerData.username },
       { "levels_unlocked", playerData.levels_unlocked },
     { "multiplayer_cosmetic", multiplayerCosmetic }, // Set position-based cosmetic
+         { "player_position", playerPosition }, // Also set position for reference
               { "IsReady", false }
     };
        
@@ -148,6 +168,7 @@ public class CodexMultiplayerIntegration : MonoBehaviourPunCallbacks
             ExitGames.Client.Photon.Hashtable playerProps = new ExitGames.Client.Photon.Hashtable
             {
                 { "multiplayer_cosmetic", multiplayerCosmetic },
+                { "player_position", playerPosition }, // Also set position for reference
                 { "IsReady", false }
             };
             
