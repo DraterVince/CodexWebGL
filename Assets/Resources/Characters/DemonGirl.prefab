@@ -100,11 +100,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   characterScale: {x: 5, y: 5, z: 5}
   applyScaleOnStart: 1
-  jumpToEnemyDuration: 0.5
-  jumpBackDuration: 0.5
-  jumpHeight: 2
+  jumpToEnemyDuration: 0.8
+  jumpBackDuration: 1
+  jumpHeight: 0
   attackDistance: 1.5
-  attackPauseDuration: 2
+  attackPauseDuration: 1
   jumpCurve:
     serializedVersion: 2
     m_Curve:
@@ -129,7 +129,7 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  characterAnimator: {fileID: 5962463887495278857}
+  characterAnimator: {fileID: 0}
   useSpriteAnimation: 1
   idleAnimationName: Idle
   attackAnimationTrigger: Attack

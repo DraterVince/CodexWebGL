@@ -346,11 +346,19 @@ enabled = false;
     
     private IEnumerator LoadPlayerCharacters()
     {
-        // Reduce delay to load characters faster - they're needed immediately
-        yield return new WaitForSeconds(0.5f);
+        // CRITICAL: Wait longer for player properties to sync across network
+        // Properties set in OnJoinedRoom() might not be immediately available to all clients
+        yield return new WaitForSeconds(1.0f);
         
         Log("===== LOADING CHARACTERS =====");
         Log($"Room: {PhotonNetwork.CurrentRoom.Name}, Players: {PhotonNetwork.PlayerList.Length}");
+        
+        // CRITICAL: Ensure all players have their cosmetic properties set BEFORE loading characters
+        // This is especially important for players who joined after the game started
+        EnsureAllPlayersHaveCosmeticProperties();
+        
+        // Wait a frame for properties to sync
+        yield return null;
         
         foreach (Player player in PhotonNetwork.PlayerList)
         {
@@ -413,6 +421,19 @@ enabled = false;
                 {
                     cosmetic = defaultCosmetics[playerPosition];
                     LogWarning($"Player {player.NickName} has no cosmetic property - assigned '{cosmetic}' based on position {playerPosition}");
+                    
+                    // CRITICAL: Set the cosmetic property for this player so it's synced
+                    // This ensures other clients also see the correct cosmetic
+                    if (player.IsLocal)
+                    {
+                        ExitGames.Client.Photon.Hashtable props = new ExitGames.Client.Photon.Hashtable
+                        {
+                            { "multiplayer_cosmetic", cosmetic },
+                            { "player_position", playerPosition }
+                        };
+                        player.SetCustomProperties(props);
+                        Log($"Set cosmetic property for local player {player.NickName}: {cosmetic} (Position: {playerPosition})");
+                    }
                 }
                 else
                 {
@@ -432,6 +453,60 @@ enabled = false;
         
         // Don't show character here - let the turn system handle it after initialization
         // This ensures characters are loaded before OnTurnChanged is called
+    }
+    
+    /// <summary>
+    /// Ensure all players have their cosmetic properties set based on their position
+    /// This is called before loading characters to ensure properties are synced
+    /// </summary>
+    private void EnsureAllPlayersHaveCosmeticProperties()
+    {
+        if (!PhotonNetwork.InRoom) return;
+        
+        Log("===== Ensuring all players have cosmetic properties =====");
+        
+        // Sort players by actor number to maintain consistent order
+        Player[] sortedPlayers = PhotonNetwork.PlayerList;
+        System.Array.Sort(sortedPlayers, (a, b) => a.ActorNumber.CompareTo(b.ActorNumber));
+        
+        // Use default cosmetics array (matches LobbyManager's positionBasedCosmetics)
+        string[] defaultCosmetics = { "Knight", "Ronin", "Daimyo", "King", "DemonGirl" };
+        
+        for (int i = 0; i < sortedPlayers.Length; i++)
+        {
+            Player player = sortedPlayers[i];
+            string assignedCosmetic = defaultCosmetics.Length > i ? defaultCosmetics[i] : "Default";
+            
+            // Check if player already has the correct cosmetic property
+            object existingCosmeticObj;
+            bool needsUpdate = true;
+            
+            if (player.CustomProperties.TryGetValue("multiplayer_cosmetic", out existingCosmeticObj))
+            {
+                string existingCosmetic = existingCosmeticObj.ToString();
+                if (existingCosmetic == assignedCosmetic && !string.IsNullOrWhiteSpace(existingCosmetic))
+                {
+                    needsUpdate = false;
+                    Log($"Player {player.NickName} already has correct cosmetic: {assignedCosmetic}");
+                }
+            }
+            
+            // Set cosmetic property for local player if needed
+            if (needsUpdate && player.IsLocal)
+            {
+                ExitGames.Client.Photon.Hashtable props = new ExitGames.Client.Photon.Hashtable
+                {
+                    { "multiplayer_cosmetic", assignedCosmetic },
+                    { "player_position", i }
+                };
+                player.SetCustomProperties(props);
+                Log($"Set cosmetic property for local player {player.NickName}: {assignedCosmetic} (Position: {i})");
+            }
+            else if (needsUpdate)
+            {
+                LogWarning($"Remote player {player.NickName} (ActorNumber: {player.ActorNumber}) should have cosmetic '{assignedCosmetic}' (Position: {i}), but property is missing or incorrect. Remote players must set their own properties in OnJoinedRoom().");
+            }
+        }
     }
     
     private void LoadPlayerCharacter(int actorNumber, string cosmeticData)
@@ -2320,9 +2395,115 @@ if (gameOverText != null) gameOverText.text = "GAME OVER\nShared health depleted
   
     public override void OnPlayerEnteredRoom(Player newPlayer)
     {
+        Log($"===== OnPlayerEnteredRoom: {newPlayer.NickName} (ActorNumber: {newPlayer.ActorNumber}) =====");
+        
+        // CRITICAL: If a new player joins after characters are loaded, we need to load their character
+        // Wait a bit for their cosmetic property to be set
+        if (playerCharacters != null && playerCharacters.Count > 0)
+        {
+            Log($"New player joined after characters were loaded - will load their character after property sync");
+            StartCoroutine(LoadNewPlayerCharacterAfterDelay(newPlayer, 1.0f));
+        }
+        
         UpdatePlayerListUI();
     }
     
+    /// <summary>
+    /// Load character for a player who joined after the initial character loading
+    /// </summary>
+    private IEnumerator LoadNewPlayerCharacterAfterDelay(Player player, float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        
+        if (!PhotonNetwork.InRoom || player == null)
+        {
+            LogWarning("Cannot load new player character - not in room or player is null");
+            yield break;
+        }
+        
+        Log($"===== Loading character for new player: {player.NickName} =====");
+        
+        // Check if character already exists
+        if (playerCharacters.ContainsKey(player.ActorNumber) && playerCharacters[player.ActorNumber] != null)
+        {
+            LogWarning($"Character for player {player.NickName} (ActorNumber: {player.ActorNumber}) already exists!");
+            yield break;
+        }
+        
+        // Get cosmetic property
+        object cosmeticObj;
+        string cosmetic = "Default";
+        
+        if (player.CustomProperties.TryGetValue("multiplayer_cosmetic", out cosmeticObj))
+        {
+            cosmetic = cosmeticObj.ToString();
+            Log($"Found 'multiplayer_cosmetic' property: {cosmetic}");
+        }
+        else
+        {
+            // Calculate based on position
+            Player[] sortedPlayers = PhotonNetwork.PlayerList;
+            System.Array.Sort(sortedPlayers, (a, b) => a.ActorNumber.CompareTo(b.ActorNumber));
+            
+            int playerPosition = -1;
+            for (int i = 0; i < sortedPlayers.Length; i++)
+            {
+                if (sortedPlayers[i].ActorNumber == player.ActorNumber)
+                {
+                    playerPosition = i;
+                    break;
+                }
+            }
+            
+            string[] defaultCosmetics = { "Knight", "Ronin", "Daimyo", "King", "DemonGirl" };
+            if (playerPosition >= 0 && playerPosition < defaultCosmetics.Length)
+            {
+                cosmetic = defaultCosmetics[playerPosition];
+                LogWarning($"Player {player.NickName} has no cosmetic property - assigned '{cosmetic}' based on position {playerPosition}");
+            }
+        }
+        
+        LoadPlayerCharacter(player.ActorNumber, cosmetic);
+        Log($"===== Character loading complete for new player: {player.NickName} =====");
+    }
+    
+    /// <summary>
+    /// Called when a player's custom properties are updated
+    /// </summary>
+    public override void OnPlayerPropertiesUpdate(Player targetPlayer, ExitGames.Client.Photon.Hashtable changedProps)
+    {
+        Log($"===== OnPlayerPropertiesUpdate: {targetPlayer.NickName} =====");
+        
+        // Check if cosmetic property was updated
+        if (changedProps.ContainsKey("multiplayer_cosmetic"))
+        {
+            object cosmeticObj = changedProps["multiplayer_cosmetic"];
+            string cosmetic = cosmeticObj != null ? cosmeticObj.ToString() : "Default";
+            Log($"Player {targetPlayer.NickName} cosmetic property updated to: {cosmetic}");
+            
+            // If character already exists but with wrong cosmetic, reload it
+            if (playerCharacters.ContainsKey(targetPlayer.ActorNumber))
+            {
+                GameObject existingCharacter = playerCharacters[targetPlayer.ActorNumber];
+                if (existingCharacter != null)
+                {
+                    // Check if the character needs to be reloaded
+                    // For now, just log - reloading could cause issues if character is currently displayed
+                    Log($"Character for {targetPlayer.NickName} already exists - cosmetic property update noted (character not reloaded to avoid disruption)");
+                }
+            }
+            else
+            {
+                // Character doesn't exist yet - load it
+                Log($"Character for {targetPlayer.NickName} doesn't exist yet - loading with cosmetic: {cosmetic}");
+                LoadPlayerCharacter(targetPlayer.ActorNumber, cosmetic);
+            }
+        }
+        
+        // Update player list UI if other properties changed
+        UpdatePlayerListUI();
+    }
+  
     /// <summary>
     /// Return all players to lobby after a delay
     /// </summary>
