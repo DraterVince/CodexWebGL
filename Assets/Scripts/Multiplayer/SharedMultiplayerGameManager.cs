@@ -128,24 +128,50 @@ enabled = false;
          return;
         }
      
-        if (PhotonNetwork.IsMasterClient)
-        {
-  InitializeSharedHealth();
-        StartCoroutine(InitializeTurnSystemDelayed());
-   }
-        
-      if (turnSystem != null)
+           if (turnSystem != null)
         {
             turnSystem.OnTurnChanged += OnTurnChanged;
-  }
+        }
         else
-    {
-        LogWarning("Turn system is NULL!");
+        {
+            LogWarning("Turn system is NULL!");
         }
         
-   InitializeUI();
+        InitializeUI();
         UpdatePlayerListUI();
-        StartCoroutine(LoadPlayerCharacters());
+        
+        // Load characters FIRST, then initialize turn system if master client
+        // This ensures characters are ready when OnTurnChanged is called
+        if (PhotonNetwork.IsMasterClient)
+        {
+            InitializeSharedHealth();
+            StartCoroutine(LoadCharactersThenInitializeTurnSystem());
+        }
+        else
+        {
+            // Non-master clients just load characters
+            StartCoroutine(LoadPlayerCharacters());
+        }
+    }
+    
+    private System.Collections.IEnumerator LoadCharactersThenInitializeTurnSystem()
+    {
+        // Load characters first
+        yield return StartCoroutine(LoadPlayerCharacters());
+        
+        // Wait a bit more to ensure characters are fully instantiated
+        yield return new WaitForSeconds(0.2f);
+        
+        // Now initialize turn system - characters should be loaded by now
+        if (turnSystem != null)
+        {
+            Log("Manually initializing turn system (characters loaded)");
+            turnSystem.InitializeTurnSystem();
+        }
+        else
+        {
+            LogError("Cannot initialize - turn system component is missing!");
+        }
     }
     
     private System.Collections.IEnumerator InitializeTurnSystemDelayed()
@@ -318,66 +344,52 @@ enabled = false;
     
     private IEnumerator LoadPlayerCharacters()
     {
-     yield return new WaitForSeconds(1.5f);
+        // Reduce delay to load characters faster - they're needed immediately
+        yield return new WaitForSeconds(0.5f);
         
         Log("===== LOADING CHARACTERS =====");
- Log($"Room: {PhotonNetwork.CurrentRoom.Name}, Players: {PhotonNetwork.PlayerList.Length}");
+        Log($"Room: {PhotonNetwork.CurrentRoom.Name}, Players: {PhotonNetwork.PlayerList.Length}");
         
-      foreach (Player player in PhotonNetwork.PlayerList)
+        foreach (Player player in PhotonNetwork.PlayerList)
         {
             Log($"Processing player: {player.NickName}, ActorNumber: {player.ActorNumber}");
          
-    object cosmeticObj;
+            object cosmeticObj;
             string cosmetic = "Default";
             
-      if (player.CustomProperties.TryGetValue("multiplayer_cosmetic", out cosmeticObj))
-          {
-     cosmetic = cosmeticObj.ToString();
-            }
-         else if (player.CustomProperties.TryGetValue("cosmetic", out cosmeticObj))
+            if (player.CustomProperties.TryGetValue("multiplayer_cosmetic", out cosmeticObj))
             {
                 cosmetic = cosmeticObj.ToString();
-   }
+            }
+            else if (player.CustomProperties.TryGetValue("cosmetic", out cosmeticObj))
+            {
+                cosmetic = cosmeticObj.ToString();
+            }
             else if (player.CustomProperties.TryGetValue("current_cosmetic", out cosmeticObj))
-      {
-          cosmetic = cosmeticObj.ToString();
-    }
+            {
+                cosmetic = cosmeticObj.ToString();
+            }
             else
-    {
-        LogWarning($"Player {player.NickName} has no cosmetic property! Using Default");
+            {
+                LogWarning($"Player {player.NickName} has no cosmetic property! Using Default");
             }
         
-      if (string.IsNullOrWhiteSpace(cosmetic))
-     {
-       LogWarning($"Player {player.NickName} has empty cosmetic! Using Default");
-          cosmetic = "Default";
-    }
+            if (string.IsNullOrWhiteSpace(cosmetic))
+            {
+                LogWarning($"Player {player.NickName} has empty cosmetic! Using Default");
+                cosmetic = "Default";
+            }
             
-   LoadPlayerCharacter(player.ActorNumber, cosmetic);
+            LoadPlayerCharacter(player.ActorNumber, cosmetic);
         }
         
-        yield return new WaitForSeconds(0.5f);
+        yield return null; // Wait one frame for instantiation to complete
         
-      Log("===== CHARACTER LOADING COMPLETE =====");
+        Log("===== CHARACTER LOADING COMPLETE =====");
         Log($"Loaded {playerCharacters.Count} characters");
         
-        if (PhotonNetwork.PlayerList.Length > 0)
-        {
-       int firstActorNumber = PhotonNetwork.PlayerList[0].ActorNumber;
-    
-            if (playerCharacters.ContainsKey(firstActorNumber))
-            {
-      ShowCharacter(firstActorNumber, false);
-            }
-   else
- {
-  LogError($"CRITICAL: Character for actor {firstActorNumber} was not loaded!");
-   }
-     }
-        else
-    {
-            LogError("No players in room after loading!");
-        }
+        // Don't show character here - let the turn system handle it after initialization
+        // This ensures characters are loaded before OnTurnChanged is called
     }
     
     private void LoadPlayerCharacter(int actorNumber, string cosmeticData)
@@ -514,11 +526,19 @@ if (prefab != null)
   {
           LogError($"? No character found for actor {actorNumber}!");
             
-   Player player = PhotonNetwork.CurrentRoom.GetPlayer(actorNumber);
-if (player != null)
-   {
-         LogError($"Missing character for player: {player.NickName}");
-          }
+            Player player = PhotonNetwork.CurrentRoom.GetPlayer(actorNumber);
+            if (player != null)
+            {
+                LogError($"Missing character for player: {player.NickName}");
+            }
+            
+            // If characters are still loading, wait a bit and retry
+            if (playerCharacters.Count == 0)
+            {
+                LogWarning("Characters not loaded yet - waiting and retrying...");
+                StartCoroutine(RetryShowCharacterAfterDelay(actorNumber, animated, 0.5f));
+                return;
+            }
             
             LogWarning("Continuing gameplay without character visual for this player.");
          return;
@@ -751,16 +771,25 @@ if (player != null)
     {
         Log($"========== TURN CHANGED TO: {player.NickName} ==========");
         
-    // CRITICAL FIX: Check ActorNumber instead of relying on IsLocal
-   // player.IsLocal can return false even for the local player in some cases
-bool isMyTurn = (player.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
+        // CRITICAL FIX: Check ActorNumber instead of relying on IsLocal
+        // player.IsLocal can return false even for the local player in some cases
+        bool isMyTurn = (player.ActorNumber == PhotonNetwork.LocalPlayer.ActorNumber);
         
         Log($"Player ActorNumber: {player.ActorNumber}");
         Log($"Local Player ActorNumber: {PhotonNetwork.LocalPlayer.ActorNumber}");
         Log($"Is my turn: {isMyTurn}");
 
-        // Switch to new player's character
-        ShowCharacter(player.ActorNumber, true);
+        // Switch to new player's character (with retry if not loaded yet)
+        if (playerCharacters.ContainsKey(player.ActorNumber))
+        {
+            ShowCharacter(player.ActorNumber, true);
+        }
+        else
+        {
+            LogWarning($"Character for actor {player.ActorNumber} not loaded yet - will retry");
+            // Retry showing character after a delay if characters are still loading
+            StartCoroutine(RetryShowCharacterAfterDelay(player.ActorNumber, true, 0.5f));
+        }
   
         // Update UI
         UpdateTurnUI();
@@ -1362,15 +1391,28 @@ playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
    }
         else
             {
-          // Enemy still alive but player got correct answer - increment card set
+            // Enemy still alive but player got correct answer - increment card set
       Log("Enemy still alive - incrementing card counter and advancing turn");
             
             // **CRITICAL: Increment cardManager.counter on EVERY correct answer**
             // This changes the card set for the next player
+            // BUT: Check bounds to prevent index out of range errors
             if (cardManager != null)
             {
-                cardManager.counter++;
-                Log($"CardManager counter incremented to {cardManager.counter} after correct answer");
+                // Check if we can safely increment the counter
+                int newCounter = cardManager.counter + 1;
+                if (newCounter < cardManager.cardContainer.Count && newCounter < cardManager.cardDisplayContainer.Count)
+                {
+                    cardManager.counter = newCounter;
+                    Log($"CardManager counter incremented to {cardManager.counter} after correct answer");
+                }
+                else
+                {
+                    LogWarning($"Cannot increment card counter - would go out of range! Current: {cardManager.counter}, Max: {Mathf.Min(cardManager.cardContainer.Count, cardManager.cardDisplayContainer.Count) - 1}");
+                    LogWarning($"CardContainer count: {cardManager.cardContainer.Count}, CardDisplayContainer count: {cardManager.cardDisplayContainer.Count}");
+                    // Don't increment if it would go out of bounds - reuse the last card set
+                    Log("Reusing current card set (counter not incremented)");
+                }
             }
             
             // Sync ALL counters to all clients
@@ -1419,10 +1461,23 @@ playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
     playCardButton.counter = 0; // Reset answer index for new question
         
         // **CRITICAL: Also increment cardManager.counter to match new question**
+        // BUT: Check bounds to prevent index out of range errors
         if (cardManager != null)
         {
-            cardManager.counter++;
-            Log($"CardManager counter incremented to {cardManager.counter} for next question");
+            // Check if we can safely increment the counter
+            int newCounter = cardManager.counter + 1;
+            if (newCounter < cardManager.cardContainer.Count && newCounter < cardManager.cardDisplayContainer.Count)
+            {
+                cardManager.counter = newCounter;
+                Log($"CardManager counter incremented to {cardManager.counter} for next question");
+            }
+            else
+            {
+                LogWarning($"Cannot increment card counter after enemy defeat - would go out of range! Current: {cardManager.counter}, Max: {Mathf.Min(cardManager.cardContainer.Count, cardManager.cardDisplayContainer.Count) - 1}");
+                LogWarning($"CardContainer count: {cardManager.cardContainer.Count}, CardDisplayContainer count: {cardManager.cardDisplayContainer.Count}");
+                // Don't increment if it would go out of bounds - reuse the last card set
+                Log("Reusing current card set (counter not incremented)");
+            }
         }
         
         // Sync ALL counters to all clients using global sync
