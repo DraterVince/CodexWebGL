@@ -67,6 +67,7 @@ public class LobbyManager : MonoBehaviourPunCallbacks
     private string selectedLevel = "";
     private bool isLocalPlayerReady = false;
     private Player playerPendingKick = null; // Track who is pending kick
+    private bool hasManuallyConnected = false; // Track if user clicked connect button
     
     // NEW: Step 2 - List to track dynamic player entries
     private List<PlayerListEntry> playerEntries = new List<PlayerListEntry>();
@@ -120,14 +121,20 @@ SetupButtons();
         lobbyInfoText.text = $"In Lobby - {PhotonNetwork.CountOfPlayers} players online";
      }
      
-     // Ensure UI panels match connection state
-     if (PhotonNetwork.InLobby && lobbyPanel != null && !lobbyPanel.activeSelf && !PhotonNetwork.InRoom)
+     // Ensure UI panels match connection state - but only if user manually connected
+     if (hasManuallyConnected && PhotonNetwork.InLobby && lobbyPanel != null && !lobbyPanel.activeSelf && !PhotonNetwork.InRoom)
      {
          ShowLobbyPanel();
+     }
+     else if (!hasManuallyConnected && connectionPanel != null && !connectionPanel.activeSelf && !PhotonNetwork.InRoom)
+     {
+         // If user hasn't manually connected, always show connection panel
+         ShowConnectionPanel();
      }
      else if (!PhotonNetwork.InLobby && !PhotonNetwork.IsConnected && connectionPanel != null && !connectionPanel.activeSelf && !PhotonNetwork.InRoom)
      {
          ShowConnectionPanel();
+         hasManuallyConnected = false; // Reset flag when disconnected
      }
     }
 
@@ -238,13 +245,21 @@ SetupButtons();
     {
         string nickname = nicknameInput != null ? nicknameInput.text : "Player";
 
-   if (string.IsNullOrEmpty(nickname))
+   if (string.IsNullOrEmpty(nickname) || string.IsNullOrWhiteSpace(nickname))
     {
-            nickname = "Player_" + Random.Range(1000, 9999);
+            Debug.LogWarning("[LobbyManager] Nickname is empty! Please enter a name.");
+            if (statusText != null)
+            {
+                statusText.text = "Please enter a nickname!";
+                statusText.color = Color.red;
+            }
+            return;
   }
 
   PlayerPrefs.SetString("PlayerNickname", nickname);
         PlayerPrefs.Save();
+
+        hasManuallyConnected = true; // Mark that user manually connected
 
         if (NetworkManager.Instance != null)
     {
@@ -282,18 +297,25 @@ SetupButtons();
         }
         
 string roomName = roomNameInput != null && !string.IsNullOrEmpty(roomNameInput.text) 
-            ? roomNameInput.text 
+            ? roomNameInput.text.Trim() 
             : "Room_" + Random.Range(1000, 9999);
+ 
+        if (string.IsNullOrEmpty(roomName) || string.IsNullOrWhiteSpace(roomName))
+        {
+            Debug.LogWarning("[LobbyManager] Room name is empty! Generating random name.");
+            roomName = "Room_" + Random.Range(1000, 9999);
+        }
  
      RoomOptions roomOptions = new RoomOptions
         {
          MaxPlayers = (byte)maxPlayers,
  IsVisible = true,
-            IsOpen = true
+            IsOpen = true,
+            PublishUserId = true // Make sure player IDs are published for joining
         };
 
+        Debug.Log($"[LobbyManager] Creating room: '{roomName}' (Max: {maxPlayers} players, Visible: {roomOptions.IsVisible}, Open: {roomOptions.IsOpen})");
         PhotonNetwork.CreateRoom(roomName, roomOptions);
-        Debug.Log($"Creating room: {roomName} (Max: {maxPlayers} players)");
     }
 
     private void OnJoinRoomButtonClicked()
@@ -321,18 +343,23 @@ string roomName = roomNameInput != null && !string.IsNullOrEmpty(roomNameInput.t
             return;
         }
         
-        string roomName = roomNameInput != null ? roomNameInput.text : "";
+        string roomName = roomNameInput != null ? roomNameInput.text.Trim() : "";
       
-        if (!string.IsNullOrEmpty(roomName))
+        if (!string.IsNullOrEmpty(roomName) && !string.IsNullOrWhiteSpace(roomName))
         {
+            Debug.Log($"[LobbyManager] Attempting to join room: '{roomName}'");
             if (NetworkManager.Instance != null)
    {
          NetworkManager.Instance.JoinRoom(roomName);
       }
+            else
+            {
+                Debug.LogError("[LobbyManager] NetworkManager.Instance is null!");
+            }
         }
         else
         {
-            Debug.LogWarning("Please enter a room name!");
+            Debug.LogWarning("[LobbyManager] Please enter a room name!");
             if (statusText != null)
             {
                 statusText.text = "Please enter a room name!";
@@ -802,6 +829,9 @@ if (currentPlayers < minPlayers)
         // Reset ready state
         isLocalPlayerReady = false;
         
+        // Reset manual connection flag
+        hasManuallyConnected = false;
+        
         // Clear dynamic player list
         ClearDynamicPlayerList();
     }
@@ -898,9 +928,28 @@ if (currentPlayers < minPlayers)
     {
         Debug.LogError($"[LobbyManager] Failed to join room: {message} (ReturnCode: {returnCode})");
         
+        string errorMessage = message;
+        
+        // Provide user-friendly error messages
+        switch (returnCode)
+        {
+            case 32760: // GameDoesNotExist
+                errorMessage = "Room does not exist! Check the room name and try again.";
+                break;
+            case 32758: // GameFull
+                errorMessage = "Room is full! Maximum players reached.";
+                break;
+            case 32757: // GameClosed
+                errorMessage = "Room is closed! The host may have started the game.";
+                break;
+            default:
+                errorMessage = $"Failed to join: {message}";
+                break;
+        }
+        
         if (statusText != null)
         {
-            statusText.text = $"Failed to join room: {message}";
+            statusText.text = errorMessage;
             statusText.color = Color.red;
         }
         

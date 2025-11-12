@@ -65,8 +65,9 @@ public class NetworkManager : MonoBehaviourPunCallbacks
 
     private void Start()
     {
-        // Check if current scene is multiplayer
-        CheckAndConnectIfNeeded();
+        // Don't auto-connect on scene load - user must manually click connect
+        // This prevents auto-connecting when entering multiplayer scenes
+        // CheckAndConnectIfNeeded(); // Disabled - require manual connection
     }
 
     /// <summary>
@@ -74,7 +75,12 @@ public class NetworkManager : MonoBehaviourPunCallbacks
     /// </summary>
     private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        CheckAndConnectIfNeeded();
+        // Don't auto-connect on scene load - user must manually click connect
+        // Only check connection if already in a room (for scene syncing)
+        if (PhotonNetwork.InRoom)
+        {
+            Debug.Log($"[NetworkManager] Scene loaded while in room - staying connected for scene sync");
+        }
 
         // Ensure scene stays in sync with Master Client when already in a Photon room
         if (PhotonNetwork.InRoom && PhotonNetwork.AutomaticallySyncScene && !PhotonNetwork.IsMasterClient)
@@ -258,20 +264,22 @@ public class NetworkManager : MonoBehaviourPunCallbacks
             return;
         }
         
-        if (string.IsNullOrEmpty(roomName))
+        if (string.IsNullOrEmpty(roomName) || string.IsNullOrWhiteSpace(roomName))
         {
             roomName = "Room_" + Random.Range(1000, 9999);
+            Debug.LogWarning($"[NetworkManager] Room name was empty, generated: {roomName}");
         }
 
         RoomOptions roomOptions = new RoomOptions
         {
             MaxPlayers = maxPlayersPerRoom,
-            IsVisible = true,
-            IsOpen = true
+            IsVisible = true, // Make room visible in lobby
+            IsOpen = true, // Allow players to join
+            PublishUserId = true // Publish user IDs for better matching
         };
 
+        Debug.Log($"[NetworkManager] Creating room: '{roomName}' (Max: {maxPlayersPerRoom}, Visible: {roomOptions.IsVisible}, Open: {roomOptions.IsOpen})");
         PhotonNetwork.CreateRoom(roomName, roomOptions);
-        Debug.Log($"Creating room: {roomName}");
     }
 
     public void JoinRoom(string roomName)
@@ -288,14 +296,14 @@ public class NetworkManager : MonoBehaviourPunCallbacks
             return;
         }
         
-        if (!string.IsNullOrEmpty(roomName))
+        if (!string.IsNullOrEmpty(roomName) && !string.IsNullOrWhiteSpace(roomName))
         {
+            Debug.Log($"[NetworkManager] Attempting to join room: '{roomName}'");
             PhotonNetwork.JoinRoom(roomName);
-            Debug.Log($"Attempting to join room: {roomName}");
         }
         else
         {
-            Debug.LogWarning("Room name is empty!");
+            Debug.LogWarning("[NetworkManager] Room name is empty or whitespace!");
         }
     }
 
@@ -454,8 +462,16 @@ public class NetworkManager : MonoBehaviourPunCallbacks
 
     public override void OnCreatedRoom()
     {
-        Debug.Log($"? Room Created: {PhotonNetwork.CurrentRoom.Name}");
-        CurrentRoomName = PhotonNetwork.CurrentRoom.Name;
+        if (PhotonNetwork.CurrentRoom != null)
+        {
+            Debug.Log($"? Room Created: {PhotonNetwork.CurrentRoom.Name}");
+            Debug.Log($"[NetworkManager] Room Properties - Visible: {PhotonNetwork.CurrentRoom.IsVisible}, Open: {PhotonNetwork.CurrentRoom.IsOpen}, MaxPlayers: {PhotonNetwork.CurrentRoom.MaxPlayers}");
+            CurrentRoomName = PhotonNetwork.CurrentRoom.Name;
+        }
+        else
+        {
+            Debug.LogError("[NetworkManager] OnCreatedRoom called but CurrentRoom is null!");
+        }
     }
 
     public override void OnCreateRoomFailed(short returnCode, string message)
