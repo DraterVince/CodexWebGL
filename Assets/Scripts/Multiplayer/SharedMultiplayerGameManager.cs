@@ -31,6 +31,8 @@ public class SharedMultiplayerGameManager : MonoBehaviourPunCallbacks
     [SerializeField] private float characterSlideSpeed = 5f;
     [SerializeField] private Vector3 offScreenLeft = new Vector3(-15f, 0f, 0f);
     [SerializeField] private Vector3 offScreenRight = new Vector3(15f, 0f, 0f);
+    [SerializeField] private string idleAnimationTrigger = "Idle";
+    [SerializeField] private string attackAnimationTrigger = "Attack";
   
     [Header("Turn Display")]
     [SerializeField] private TextMeshProUGUI currentTurnText;
@@ -411,6 +413,13 @@ enabled = false;
  character.name = $"Character_{player.NickName}_Actor{actorNumber}";
                 character.SetActive(false);
        
+          // Ensure character has Animator component
+          Animator animator = character.GetComponent<Animator>();
+          if (animator == null)
+          {
+              LogWarning($"Character prefab for {player.NickName} doesn't have an Animator component. Attack/Idle animations may not work.");
+          }
+       
           playerCharacters[actorNumber] = character;
        
            Log($"? Character created and stored for actor {actorNumber}");
@@ -533,8 +542,55 @@ if (player != null)
             currentCharacterInstance.transform.position = characterDisplayPosition.position;
         currentCharacterInstance.SetActive(true);
        
+        // Update PlayCardButton reference for attack animations
+        if (playCardButton != null)
+        {
+            playCardButton.playerCharacter = currentCharacterInstance;
+            // Try to get CharacterJumpAttack component
+            CharacterJumpAttack jumpAttack = currentCharacterInstance.GetComponent<CharacterJumpAttack>();
+            if (jumpAttack != null)
+            {
+                playCardButton.playerJumpAttack = jumpAttack;
+            }
+        }
+       
+        // Play idle animation
+        PlayCharacterAnimation(actorNumber, idleAnimationTrigger);
+       
     Log($"? Character {actorNumber} shown at position {characterDisplayPosition.position}");
   }
+    }
+    
+    /// <summary>
+    /// Play animation on character by actor number
+    /// </summary>
+    private void PlayCharacterAnimation(int actorNumber, string triggerName)
+    {
+        if (playerCharacters.ContainsKey(actorNumber))
+        {
+            Animator animator = playerCharacters[actorNumber].GetComponent<Animator>();
+            if (animator != null)
+            {
+                animator.SetTrigger(triggerName);
+                Log($"Playing animation '{triggerName}' on character {actorNumber}");
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Play attack animation on current character
+    /// </summary>
+    public void PlayCurrentCharacterAttack()
+    {
+        if (currentCharacterInstance != null)
+        {
+            Animator animator = currentCharacterInstance.GetComponent<Animator>();
+            if (animator != null)
+            {
+                animator.SetTrigger(attackAnimationTrigger);
+                Log("Playing attack animation on current character");
+            }
+        }
     }
     
     private IEnumerator SwitchCharacterAnimated(int newActorNumber)
@@ -567,6 +623,18 @@ float elapsed = 0f;
             currentCharacterInstance.SetActive(true);
      currentCharacterInstance.transform.position = offScreenRight;
             
+            // Update PlayCardButton reference for attack animations
+            if (playCardButton != null)
+            {
+                playCardButton.playerCharacter = currentCharacterInstance;
+                // Try to get CharacterJumpAttack component
+                CharacterJumpAttack jumpAttack = currentCharacterInstance.GetComponent<CharacterJumpAttack>();
+                if (jumpAttack != null)
+                {
+                    playCardButton.playerJumpAttack = jumpAttack;
+                }
+            }
+            
     Vector3 startPos = offScreenRight;
      Vector3 targetPos = characterDisplayPosition.position;
      
@@ -582,6 +650,9 @@ float elapsed = 0f;
     }
           
      currentCharacterInstance.transform.position = targetPos;
+     
+     // Play idle animation after sliding in
+     PlayCharacterAnimation(newActorNumber, idleAnimationTrigger);
         }
         
     isSwitchingCharacter = false;
@@ -1036,6 +1107,10 @@ Log($"RPC_SyncCardCounter - Setting counter to {newCounter}");
    if (wasCorrect)
         {
           // CORRECT ANSWER - Trigger player attack animation on all clients
+          
+          // Play attack animation trigger on current character
+          PlayCurrentCharacterAttack();
+          
   bool hasAnimation = false;
    if (playCardButton != null && playCardButton.useJumpAttackAnimation && 
    playCardButton.playerCharacter != null && 

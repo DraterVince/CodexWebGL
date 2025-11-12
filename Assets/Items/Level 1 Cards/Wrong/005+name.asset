@@ -13,5 +13,5 @@ MonoBehaviour:
   m_Name: 005+name
   m_EditorClassIdentifier: 
   id: 2001
-  cardName: _username
+  cardName: +name
   artwork: {fileID: 21300000, guid: c1e94076438282b4c8eb4f98b1153bda, type: 3}
