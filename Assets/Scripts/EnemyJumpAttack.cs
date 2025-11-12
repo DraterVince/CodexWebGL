@@ -25,6 +25,7 @@ public float attackDistance = 1.5f;
     public Vector3 attackEffectOffset = Vector3.zero;
     
   private Vector3 originalPosition;
+    private Quaternion originalRotation;
     private bool isAnimating = false;
     private bool hasShownIdleWarning = false;
 
@@ -35,8 +36,9 @@ public float attackDistance = 1.5f;
      transform.localScale = characterScale;
       }
         
-        // Initialize original position - this will be updated before each attack
+        // Initialize original position and rotation - this will be updated before each attack
         originalPosition = transform.position;
+        originalRotation = transform.rotation;
         
         if (characterAnimator == null && useSpriteAnimation)
         {
@@ -70,10 +72,11 @@ if (useSpriteAnimation && characterAnimator != null)
     
     void OnEnable()
     {
-        // Update original position when enemy is enabled (in case it was repositioned)
+        // Update original position and rotation when enemy is enabled (in case it was repositioned)
         if (!isAnimating)
         {
             originalPosition = transform.position;
+            originalRotation = transform.rotation;
         }
     }
 
@@ -272,28 +275,34 @@ if (useSpriteAnimation && characterAnimator != null)
         Debug.Log($"[EnemyJumpAttack] {gameObject.name}: Enemy at {startPosition}, Player at {targetPosition}, Distance: {distanceToTarget:F2}");
         Debug.Log($"[EnemyJumpAttack] Jump distance: {jumpDistance:F2}, Attack position: {attackPosition}, Final distance to player: {Vector3.Distance(attackPosition, targetPosition):F2}");
         
-        // Make enemy face the player before jumping (for 2D sprites, this might need sprite flipping instead)
-        // Note: For 2D sprites, you might want to flip the sprite scale instead of rotating
+        // Make enemy face the player before jumping - use sprite flipping for 2D sprites
+        // For 2D sprites, flip horizontally instead of rotating to avoid upside-down sprites
+        // CRITICAL: Always reset rotation to originalRotation to prevent unwanted rotations
+        transform.rotation = originalRotation;
+        
         if (directionToTarget.magnitude > 0.01f)
         {
-            // For 2D: Calculate which direction enemy should face
-            // If moving right (positive X), keep default rotation
-            // If moving left (negative X), flip sprite or rotate 180 degrees
-            float angle = Mathf.Atan2(directionToTarget.y, directionToTarget.x) * Mathf.Rad2Deg;
+            // Try to get SpriteRenderer for 2D sprite flipping
+            SpriteRenderer spriteRenderer = GetComponent<SpriteRenderer>();
+            if (spriteRenderer == null)
+            {
+                spriteRenderer = GetComponentInChildren<SpriteRenderer>();
+            }
             
-            // For 2D sprites, you might want to use this instead:
-            // SpriteRenderer spriteRenderer = GetComponent<SpriteRenderer>();
-            // if (spriteRenderer != null && directionToTarget.x < 0)
-            // {
-            //     spriteRenderer.flipX = true;
-            // }
-            // else if (spriteRenderer != null && directionToTarget.x > 0)
-            // {
-            //     spriteRenderer.flipX = false;
-            // }
-            
-            // For now, use rotation (this works for 3D or if sprite supports rotation)
-            transform.rotation = Quaternion.Euler(0, 0, angle);
+            if (spriteRenderer != null)
+            {
+                // For 2D sprites: Flip horizontally based on X direction
+                // If player is to the right (positive X), face right (flipX = false)
+                // If player is to the left (negative X), face left (flipX = true)
+                spriteRenderer.flipX = directionToTarget.x < 0;
+                Debug.Log($"[EnemyJumpAttack] {gameObject.name}: Flipping sprite - flipX={spriteRenderer.flipX} (direction.x={directionToTarget.x:F2})");
+            }
+            else
+            {
+                // No SpriteRenderer found - might be 3D
+                // For 3D, we might want to rotate to face the player, but for 2D side-scrolling, we don't want rotation
+                Debug.Log($"[EnemyJumpAttack] {gameObject.name}: No SpriteRenderer found - keeping original rotation");
+            }
         }
         
         yield return StartCoroutine(JumpToPosition(startPosition, attackPosition, jumpToPlayerDuration));
@@ -339,6 +348,9 @@ if (useSpriteAnimation && characterAnimator != null)
       // CRITICAL FIX: Return to originalPosition, not startPosition, to prevent jumping backwards
       yield return StartCoroutine(JumpToPosition(transform.position, originalPosition, jumpBackDuration));
         
+        // CRITICAL: Reset rotation to originalRotation after returning to prevent upside-down or rotated sprites
+        transform.rotation = originalRotation;
+        
         PlayIdleAnimation();
   
         isAnimating = false;
@@ -378,6 +390,7 @@ if (useSpriteAnimation && characterAnimator != null)
   if (!isAnimating)
   {
  originalPosition = transform.position;
+            originalRotation = transform.rotation;
         }
     }
 
@@ -385,6 +398,7 @@ if (useSpriteAnimation && characterAnimator != null)
     {
         StopAllCoroutines();
      transform.position = originalPosition;
+        transform.rotation = originalRotation;
         isAnimating = false;
         PlayIdleAnimation();
     }

@@ -606,14 +606,52 @@ if (prefab != null)
     /// </summary>
     private void PlayCharacterAnimation(int actorNumber, string triggerName)
     {
-        if (playerCharacters.ContainsKey(actorNumber))
+        if (!playerCharacters.ContainsKey(actorNumber))
         {
-            Animator animator = playerCharacters[actorNumber].GetComponent<Animator>();
-            if (animator != null)
+            LogWarning($"Cannot play animation - character for actor {actorNumber} not found");
+            return;
+        }
+        
+        GameObject character = playerCharacters[actorNumber];
+        if (character == null)
+        {
+            LogWarning($"Cannot play animation - character GameObject for actor {actorNumber} is null");
+            return;
+        }
+        
+        // Try to get Animator component
+        Animator animator = character.GetComponent<Animator>();
+        if (animator == null)
+        {
+            animator = character.GetComponentInChildren<Animator>();
+        }
+        
+        if (animator != null && animator.runtimeAnimatorController != null)
+        {
+            // Check if trigger exists in animator
+            bool hasTrigger = false;
+            foreach (AnimatorControllerParameter param in animator.parameters)
+            {
+                if (param.name == triggerName && param.type == AnimatorControllerParameterType.Trigger)
+                {
+                    hasTrigger = true;
+                    break;
+                }
+            }
+            
+            if (hasTrigger)
             {
                 animator.SetTrigger(triggerName);
                 Log($"Playing animation '{triggerName}' on character {actorNumber}");
             }
+            else
+            {
+                LogWarning($"Character {actorNumber} has Animator but no '{triggerName}' trigger parameter. Available parameters: {string.Join(", ", System.Array.ConvertAll(animator.parameters, p => p.name))}");
+            }
+        }
+        else
+        {
+            LogWarning($"Character {actorNumber} has no Animator component or Animator Controller - animation '{triggerName}' cannot play");
         }
     }
     
@@ -622,14 +660,45 @@ if (prefab != null)
     /// </summary>
     public void PlayCurrentCharacterAttack()
     {
-        if (currentCharacterInstance != null)
+        if (currentCharacterInstance == null)
         {
-            Animator animator = currentCharacterInstance.GetComponent<Animator>();
-            if (animator != null)
+            LogWarning("Cannot play attack animation - currentCharacterInstance is null");
+            return;
+        }
+        
+        // Try to get Animator component
+        Animator animator = currentCharacterInstance.GetComponent<Animator>();
+        if (animator == null)
+        {
+            animator = currentCharacterInstance.GetComponentInChildren<Animator>();
+        }
+        
+        if (animator != null && animator.runtimeAnimatorController != null)
+        {
+            // Check if trigger exists
+            bool hasTrigger = false;
+            foreach (AnimatorControllerParameter param in animator.parameters)
+            {
+                if (param.name == attackAnimationTrigger && param.type == AnimatorControllerParameterType.Trigger)
+                {
+                    hasTrigger = true;
+                    break;
+                }
+            }
+            
+            if (hasTrigger)
             {
                 animator.SetTrigger(attackAnimationTrigger);
-                Log("Playing attack animation on current character");
+                Log($"Playing attack animation '{attackAnimationTrigger}' on current character");
             }
+            else
+            {
+                LogWarning($"Current character has Animator but no '{attackAnimationTrigger}' trigger parameter. Available parameters: {string.Join(", ", System.Array.ConvertAll(animator.parameters, p => p.name))}");
+            }
+        }
+        else
+        {
+            LogWarning($"Current character has no Animator component or Animator Controller - attack animation cannot play");
         }
     }
     
@@ -1448,18 +1517,21 @@ playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
             if (cardManager != null)
             {
                 // Check if we can safely increment the counter
+                int maxCounter = Mathf.Min(cardManager.cardContainer.Count, cardManager.cardDisplayContainer.Count) - 1;
                 int newCounter = cardManager.counter + 1;
-                if (newCounter < cardManager.cardContainer.Count && newCounter < cardManager.cardDisplayContainer.Count)
+                
+                if (newCounter <= maxCounter && newCounter >= 0)
                 {
                     cardManager.counter = newCounter;
-                    Log($"CardManager counter incremented to {cardManager.counter} after correct answer");
+                    Log($"CardManager counter incremented to {cardManager.counter} after correct answer (Max: {maxCounter})");
                 }
                 else
                 {
-                    LogWarning($"Cannot increment card counter - would go out of range! Current: {cardManager.counter}, Max: {Mathf.Min(cardManager.cardContainer.Count, cardManager.cardDisplayContainer.Count) - 1}");
+                    LogWarning($"Cannot increment card counter - would go out of range! Current: {cardManager.counter}, New: {newCounter}, Max: {maxCounter}");
                     LogWarning($"CardContainer count: {cardManager.cardContainer.Count}, CardDisplayContainer count: {cardManager.cardDisplayContainer.Count}");
-                    // Don't increment if it would go out of bounds - reuse the last card set
-                    Log("Reusing current card set (counter not incremented)");
+                    // Clamp counter to max value to prevent out of range errors
+                    cardManager.counter = Mathf.Clamp(cardManager.counter, 0, maxCounter);
+                    LogWarning($"Counter clamped to {cardManager.counter} - reusing last available card set");
                 }
             }
             
@@ -1513,18 +1585,21 @@ playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
         if (cardManager != null)
         {
             // Check if we can safely increment the counter
+            int maxCounter = Mathf.Min(cardManager.cardContainer.Count, cardManager.cardDisplayContainer.Count) - 1;
             int newCounter = cardManager.counter + 1;
-            if (newCounter < cardManager.cardContainer.Count && newCounter < cardManager.cardDisplayContainer.Count)
+            
+            if (newCounter <= maxCounter && newCounter >= 0)
             {
                 cardManager.counter = newCounter;
-                Log($"CardManager counter incremented to {cardManager.counter} for next question");
+                Log($"CardManager counter incremented to {cardManager.counter} for next question (Max: {maxCounter})");
             }
             else
             {
-                LogWarning($"Cannot increment card counter after enemy defeat - would go out of range! Current: {cardManager.counter}, Max: {Mathf.Min(cardManager.cardContainer.Count, cardManager.cardDisplayContainer.Count) - 1}");
+                LogWarning($"Cannot increment card counter after enemy defeat - would go out of range! Current: {cardManager.counter}, New: {newCounter}, Max: {maxCounter}");
                 LogWarning($"CardContainer count: {cardManager.cardContainer.Count}, CardDisplayContainer count: {cardManager.cardDisplayContainer.Count}");
-                // Don't increment if it would go out of bounds - reuse the last card set
-                Log("Reusing current card set (counter not incremented)");
+                // Clamp counter to max value to prevent out of range errors
+                cardManager.counter = Mathf.Clamp(cardManager.counter, 0, maxCounter);
+                LogWarning($"Counter clamped to {cardManager.counter} - reusing last available card set");
             }
         }
         

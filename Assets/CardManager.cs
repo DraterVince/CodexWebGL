@@ -122,17 +122,55 @@ public class CardManager : MonoBehaviour
                 break;
             }
             
+            // Double-check bounds before accessing
+            if (i >= cardDisplayContainer[counter].cardDisplay.Count)
+            {
+                Debug.LogError($"[CardManager] Index {i} out of range for cardDisplayContainer[{counter}]! Count: {cardDisplayContainer[counter].cardDisplay.Count}");
+                break;
+            }
+            
             int rand = Random.Range(0, chosenCards.Count);
             Item selectedCard = chosenCards[rand];
             string selectedCardName = selectedCard.cardName;
 
+            // Safely set card data with null checks (no try-catch needed - we already have bounds checks)
+            if (cardDisplayContainer[counter].cardDisplay[i] == null)
+            {
+                Debug.LogError($"[CardManager] Card display {i} is null at counter {counter}! Skipping...");
+                continue;
+            }
+            
             cardDisplayContainer[counter].cardDisplay[i].cardName = selectedCardName;
-            cardDisplayContainer[counter].cardDisplay[i].transform.GetChild(0).GetComponentInChildren<TextMeshProUGUI>().text = selectedCardName;
-            cardDisplayContainer[counter].cardDisplay[i].cardDesign.sprite = selectedCard.artwork;
+            
+            // Safely get text component with null checks
+            if (cardDisplayContainer[counter].cardDisplay[i].transform.childCount > 0)
+            {
+                Transform child = cardDisplayContainer[counter].cardDisplay[i].transform.GetChild(0);
+                if (child != null)
+                {
+                    TextMeshProUGUI textComponent = child.GetComponentInChildren<TextMeshProUGUI>();
+                    if (textComponent != null)
+                    {
+                        textComponent.text = selectedCardName;
+                    }
+                }
+            }
+            
+            // Set sprite artwork
+            if (cardDisplayContainer[counter].cardDisplay[i].cardDesign != null && selectedCard.artwork != null)
+            {
+                cardDisplayContainer[counter].cardDisplay[i].cardDesign.sprite = selectedCard.artwork;
+            }
 
+            // Yield must be outside try-catch (C# limitation)
             yield return new WaitForSeconds(0.15f);
-            cardDisplayContainer[counter].cardDisplay[i].gameObject.SetActive(true);
-            cardDisplayContainer[counter].cardDisplay[i].gameObject.transform.localScale = Vector3.one;
+            
+            // Activate card display
+            if (cardDisplayContainer[counter].cardDisplay[i] != null)
+            {
+                cardDisplayContainer[counter].cardDisplay[i].gameObject.SetActive(true);
+                cardDisplayContainer[counter].cardDisplay[i].gameObject.transform.localScale = Vector3.one;
+            }
 
             // Remove the selected card from the pool so it can't be selected again
             chosenCards.RemoveAt(rand);
