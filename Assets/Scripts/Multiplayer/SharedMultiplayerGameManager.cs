@@ -27,9 +27,12 @@ public class SharedMultiplayerGameManager : MonoBehaviourPunCallbacks
     [SerializeField] private TextMeshProUGUI sharedHealthText;
     
     [Header("Character Display")]
+    [Tooltip("Position where multiplayer player characters are displayed when it's their turn. This is where characters appear after sliding in from the right.")]
     [SerializeField] private Transform characterDisplayPosition;
     [SerializeField] private float characterSlideSpeed = 5f;
+    [Tooltip("Initial spawn position for multiplayer characters (off-screen left). Characters are instantiated here, then slide to characterDisplayPosition when shown.")]
     [SerializeField] private Vector3 offScreenLeft = new Vector3(-15f, 0f, 0f);
+    [Tooltip("Position where characters slide in from (off-screen right). Characters slide from here to characterDisplayPosition when switching turns.")]
     [SerializeField] private Vector3 offScreenRight = new Vector3(15f, 0f, 0f);
     [SerializeField] private string idleAnimationTrigger = "Idle";
     [SerializeField] private string idleAnimationStateName = "Idle"; // Fallback: use state name if trigger doesn't exist
@@ -545,9 +548,14 @@ enabled = false;
        
             try
    {
+          // CRITICAL: Multiplayer characters spawn at offScreenLeft position initially
+          // They are then moved to characterDisplayPosition when it's their turn
+          // Spawn Position: offScreenLeft (default: Vector3(-15f, 0f, 0f))
+          // Display Position: characterDisplayPosition (set in Unity Inspector)
           GameObject character = Instantiate(characterPrefab, offScreenLeft, Quaternion.identity);
  character.name = $"Character_{player.NickName}_Actor{actorNumber}";
                 character.SetActive(false);
+                Debug.Log($"[SharedMultiplayerGameManager] Character '{character.name}' spawned at initial position: {offScreenLeft}. Will be displayed at: {(characterDisplayPosition != null ? characterDisplayPosition.position.ToString() : "NULL - Set characterDisplayPosition in Inspector!")}");
        
           // Ensure character has Animator component
           Animator animator = character.GetComponent<Animator>();
@@ -1662,13 +1670,13 @@ GameObject currentEnemy = playCardButton.enemyManager.enemies[playCardButton.ene
                 }
                 else
                 {
-                    // Get player character position - prefer characterDisplayPosition if character is active
-                    Vector3 playerPosition = targetCharacter.transform.position;
-                    Log($"Enemy attacking player at position: {playerPosition} (Character: {targetCharacter.name})");
-                    Log($"Enemy position: {currentEnemy.transform.position}, Distance: {Vector3.Distance(currentEnemy.transform.position, playerPosition)}");
+                    // CRITICAL: Use Transform instead of position (same as singleplayer)
+                    // This ensures the enemy attacks the actual player character position
+                    Log($"Enemy attacking player character: {targetCharacter.name}");
+                    Log($"Enemy position: {currentEnemy.transform.position}, Player position: {targetCharacter.transform.position}, Distance: {Vector3.Distance(currentEnemy.transform.position, targetCharacter.transform.position)}");
                     
-                    // Trigger enemy attack animation
-                    enemyJumpAttack.PerformJumpAttack(playerPosition, () => {
+                    // Trigger enemy attack animation (using Transform like singleplayer)
+                    enemyJumpAttack.PerformJumpAttack(targetCharacter.transform, () => {
                         // Damage applied when animation hits
                         DamageSharedHealth(1f);
                         
@@ -1717,11 +1725,11 @@ DamageSharedHealth(1f);
                 // Update enemy's original position before attack
                 enemyJumpAttack.UpdateOriginalPosition();
                 
-                // Get player character position
-                Vector3 playerPosition = targetCharacter.transform.position;
-                Log($"Non-master: Enemy attacking player at position: {playerPosition} (Character: {targetCharacter.name})");
+                // CRITICAL: Use Transform instead of position (same as singleplayer)
+                // This ensures the enemy attacks the actual player character position
+                Log($"Non-master: Enemy attacking player character: {targetCharacter.name}");
                 
-                enemyJumpAttack.PerformJumpAttack(playerPosition, () => {
+                enemyJumpAttack.PerformJumpAttack(targetCharacter.transform, () => {
                     Log("Non-master: Enemy attack animation complete (visual only)");
                 });
             }

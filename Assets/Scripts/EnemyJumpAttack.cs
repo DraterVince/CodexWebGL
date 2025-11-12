@@ -304,50 +304,9 @@ if (useSpriteAnimation && characterAnimator != null)
         // CRITICAL: Always reset rotation to originalRotation to prevent unwanted rotations
         transform.rotation = originalRotation;
         
-        // Check if we're in multiplayer mode - only flip sprites in multiplayer
-        // In singleplayer, enemies typically don't need to flip sprites
-        bool isMultiplayer = false;
-        try
-        {
-            isMultiplayer = Photon.Pun.PhotonNetwork.IsConnected && Photon.Pun.PhotonNetwork.InRoom;
-        }
-        catch
-        {
-            // Photon not available - assume singleplayer
-            isMultiplayer = false;
-        }
-        
-        // Only flip sprite in multiplayer mode (or if explicitly enabled)
-        // In singleplayer, enemies usually face one direction
-        if (isMultiplayer && directionToTarget.magnitude > 0.01f)
-        {
-            // Try to get SpriteRenderer for 2D sprite flipping
-            SpriteRenderer spriteRenderer = GetComponent<SpriteRenderer>();
-            if (spriteRenderer == null)
-            {
-                spriteRenderer = GetComponentInChildren<SpriteRenderer>();
-            }
-            
-            if (spriteRenderer != null)
-            {
-                // For 2D sprites: Flip horizontally based on X direction
-                // If player is to the right (positive X), face right (flipX = false)
-                // If player is to the left (negative X), face left (flipX = true)
-                spriteRenderer.flipX = directionToTarget.x < 0;
-                Debug.Log($"[EnemyJumpAttack] {gameObject.name}: Flipping sprite - flipX={spriteRenderer.flipX} (direction.x={directionToTarget.x:F2})");
-            }
-            else
-            {
-                // No SpriteRenderer found - might be 3D
-                // For 3D, we might want to rotate to face the player, but for 2D side-scrolling, we don't want rotation
-                Debug.Log($"[EnemyJumpAttack] {gameObject.name}: No SpriteRenderer found - keeping original rotation");
-            }
-        }
-        else if (!isMultiplayer)
-        {
-            // Singleplayer mode - don't flip sprites, just keep original rotation
-            Debug.Log($"[EnemyJumpAttack] {gameObject.name}: Singleplayer mode - sprite flipping disabled");
-        }
+        // CRITICAL: Don't flip sprites or change rotation - keep same behavior as singleplayer
+        // This ensures enemy attack pattern matches singleplayer exactly
+        // Just keep original rotation to prevent any unwanted rotations or flips
         
         yield return StartCoroutine(JumpToPosition(startPosition, attackPosition, jumpToPlayerDuration));
         
