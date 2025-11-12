@@ -191,7 +191,9 @@ if (useSpriteAnimation && characterAnimator != null)
     {
         isAnimating = true;
  
-        Vector3 startPosition = transform.position;
+        // Update original position before attack to ensure we return to the correct position
+        originalPosition = transform.position;
+        Vector3 startPosition = originalPosition;
         Vector3 directionToTarget = (targetPosition - startPosition).normalized;
    Vector3 attackPosition = targetPosition - (directionToTarget * attackDistance);
         
@@ -235,7 +237,8 @@ if (useSpriteAnimation && characterAnimator != null)
    
      yield return new WaitForSeconds(attackPauseDuration);
      
-      yield return StartCoroutine(JumpToPosition(transform.position, startPosition, jumpBackDuration));
+      // CRITICAL FIX: Return to originalPosition, not startPosition, to prevent jumping backwards
+      yield return StartCoroutine(JumpToPosition(transform.position, originalPosition, jumpBackDuration));
         
         PlayIdleAnimation();
   

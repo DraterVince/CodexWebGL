@@ -504,7 +504,9 @@ if (prefab != null)
    
         if (isSwitchingCharacter)
         {
-        LogWarning("Already switching character, ignoring");
+        LogWarning($"Already switching character, ignoring request for actor {actorNumber}. Will retry in 0.5s...");
+            // Wait a bit and retry if we're already switching
+            StartCoroutine(RetryShowCharacterAfterDelay(actorNumber, animated, 0.5f));
        return;
    }
         
@@ -562,6 +564,24 @@ if (player != null)
     }
     
     /// <summary>
+    /// Retry showing character after a delay if switching was in progress
+    /// </summary>
+    private IEnumerator RetryShowCharacterAfterDelay(int actorNumber, bool animated, float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        
+        if (!isSwitchingCharacter)
+        {
+            Log($"Retrying ShowCharacter for actor {actorNumber} after delay");
+            ShowCharacter(actorNumber, animated);
+        }
+        else
+        {
+            LogWarning($"Still switching character after delay, giving up on actor {actorNumber}");
+        }
+    }
+    
+    /// <summary>
     /// Play animation on character by actor number
     /// </summary>
     private void PlayCharacterAnimation(int actorNumber, string triggerName)
@@ -596,66 +616,131 @@ if (player != null)
     private IEnumerator SwitchCharacterAnimated(int newActorNumber)
     {
         isSwitchingCharacter = true;
+        Log($"===== SwitchCharacterAnimated STARTED for actor {newActorNumber} =====");
         
- if (currentCharacterInstance != null)
+        // Validate character exists before starting animation
+        if (!playerCharacters.ContainsKey(newActorNumber))
+        {
+            LogError($"CRITICAL: Character for actor {newActorNumber} not found in playerCharacters dictionary!");
+            isSwitchingCharacter = false;
+            yield break;
+        }
+        
+        if (playerCharacters[newActorNumber] == null)
+        {
+            LogError($"Character instance for actor {newActorNumber} is null!");
+            isSwitchingCharacter = false;
+            yield break;
+        }
+        
+        if (characterDisplayPosition == null)
+        {
+            LogError("CharacterDisplayPosition is null! Cannot switch character.");
+            isSwitchingCharacter = false;
+            yield break;
+        }
+        
+        // Slide current character out to the left
+        if (currentCharacterInstance != null)
         {
             currentCharacterInstance.SetActive(true);
-          Vector3 startPos = currentCharacterInstance.transform.position;
+            Vector3 startPos = currentCharacterInstance.transform.position;
             Vector3 targetPos = offScreenLeft;
             
-float elapsed = 0f;
+            float elapsed = 0f;
             float duration = 1f / characterSlideSpeed;
             
-        while (elapsed < duration)
-      {
-      elapsed += Time.deltaTime;
-  float t = elapsed / duration;
-        currentCharacterInstance.transform.position = Vector3.Lerp(startPos, targetPos, t);
-      yield return null;
-  }
-      
- currentCharacterInstance.SetActive(false);
-        }
-      
-        if (playerCharacters.ContainsKey(newActorNumber))
-        {
-            currentCharacterInstance = playerCharacters[newActorNumber];
-            currentCharacterInstance.SetActive(true);
-     currentCharacterInstance.transform.position = offScreenRight;
-            
-            // Update PlayCardButton reference for attack animations
-            if (playCardButton != null)
-            {
-                playCardButton.playerCharacter = currentCharacterInstance;
-                // Try to get CharacterJumpAttack component
-                CharacterJumpAttack jumpAttack = currentCharacterInstance.GetComponent<CharacterJumpAttack>();
-                if (jumpAttack != null)
-                {
-                    playCardButton.playerJumpAttack = jumpAttack;
-                }
-            }
-            
-    Vector3 startPos = offScreenRight;
-     Vector3 targetPos = characterDisplayPosition.position;
-     
-   float elapsed = 0f;
-      float duration = 1f / characterSlideSpeed;
- 
+            Log($"Sliding out current character from {startPos} to {targetPos}");
             while (elapsed < duration)
             {
-  elapsed += Time.deltaTime;
-     float t = elapsed / duration;
-     currentCharacterInstance.transform.position = Vector3.Lerp(startPos, targetPos, t);
+                elapsed += Time.deltaTime;
+                float t = elapsed / duration;
+                if (currentCharacterInstance != null)
+                {
+                    currentCharacterInstance.transform.position = Vector3.Lerp(startPos, targetPos, t);
+                }
+                else
+                {
+                    LogWarning("Current character instance became null during slide out");
+                    break;
+                }
                 yield return null;
-    }
-          
-     currentCharacterInstance.transform.position = targetPos;
-     
-     // Play idle animation after sliding in
-     PlayCharacterAnimation(newActorNumber, idleAnimationTrigger);
+            }
+            
+            if (currentCharacterInstance != null)
+            {
+                currentCharacterInstance.transform.position = targetPos;
+                currentCharacterInstance.SetActive(false);
+                Log("Current character slid out and deactivated");
+            }
         }
         
-    isSwitchingCharacter = false;
+        // Slide new character in from the right
+        currentCharacterInstance = playerCharacters[newActorNumber];
+        if (currentCharacterInstance == null)
+        {
+            LogError($"Character instance for actor {newActorNumber} became null!");
+            isSwitchingCharacter = false;
+            yield break;
+        }
+        
+        currentCharacterInstance.SetActive(true);
+        currentCharacterInstance.transform.position = offScreenRight;
+        
+        Log($"Sliding in new character for actor {newActorNumber} from {offScreenRight}");
+        
+        // Update PlayCardButton reference for attack animations
+        if (playCardButton != null)
+        {
+            playCardButton.playerCharacter = currentCharacterInstance;
+            // Try to get CharacterJumpAttack component
+            CharacterJumpAttack jumpAttack = currentCharacterInstance.GetComponent<CharacterJumpAttack>();
+            if (jumpAttack != null)
+            {
+                playCardButton.playerJumpAttack = jumpAttack;
+                Log($"Updated PlayCardButton references for actor {newActorNumber}");
+            }
+            else
+            {
+                LogWarning($"Character for actor {newActorNumber} has no CharacterJumpAttack component");
+            }
+        }
+        
+        Vector3 slideInStartPos = offScreenRight;
+        Vector3 slideInTargetPos = characterDisplayPosition.position;
+        
+        float slideInElapsed = 0f;
+        float slideInDuration = 1f / characterSlideSpeed;
+        
+        while (slideInElapsed < slideInDuration)
+        {
+            slideInElapsed += Time.deltaTime;
+            float t = slideInElapsed / slideInDuration;
+            if (currentCharacterInstance != null)
+            {
+                currentCharacterInstance.transform.position = Vector3.Lerp(slideInStartPos, slideInTargetPos, t);
+            }
+            else
+            {
+                LogWarning("Current character instance became null during slide in");
+                break;
+            }
+            yield return null;
+        }
+        
+        if (currentCharacterInstance != null)
+        {
+            currentCharacterInstance.transform.position = slideInTargetPos;
+            Log($"New character slid in to {slideInTargetPos}");
+            
+            // Play idle animation after sliding in
+            PlayCharacterAnimation(newActorNumber, idleAnimationTrigger);
+            Log($"Idle animation triggered for actor {newActorNumber}");
+        }
+        
+        // Always reset the flag, even if there was an error
+        isSwitchingCharacter = false;
+        Log($"===== SwitchCharacterAnimated COMPLETED for actor {newActorNumber} =====");
     }
     
     #endregion
