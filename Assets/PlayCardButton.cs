@@ -275,7 +275,7 @@ PlayerTakeDamage(1);
          if (!isMultiplayerMode)
                {
    cardManager.ResetCards();
-              cardManager.StartCoroutine(cardManager.Randomize());
+              cardManager.StartRandomization();
         }
      }
              if (isMultiplayerMode && parent != null && parent.childCount > 0)
@@ -496,7 +496,7 @@ enemyHP.text = enemyHealthAmount[enemyManager.counter].ToString() + " / " + enem
  else
     {
            cardManager.ResetCards();
-              cardManager.StartCoroutine(cardManager.Randomize());
+              cardManager.StartRandomization();
           timer.ResetTimer();
           timer.StartTimer();
        }
@@ -513,7 +513,7 @@ enemyHP.text = enemyHealthAmount[enemyManager.counter].ToString() + " / " + enem
             else
       {
                 cardManager.ResetCards();
-     cardManager.StartCoroutine(cardManager.Randomize());
+     cardManager.StartRandomization();
     timer.ResetTimer();
       timer.StartTimer();
             }

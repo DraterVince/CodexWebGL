@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using TMPro;
 using Photon.Pun;
 using Photon.Realtime;
+using System.Collections;
 using System.Collections.Generic;
 
 [RequireComponent(typeof(PhotonView))]
@@ -269,16 +270,10 @@ SetupButtons();
             return;
         }
         
-        if (!PhotonNetwork.InLobby)
-        {
-            Debug.LogError("[LobbyManager] Cannot create room - not in lobby!");
-            if (statusText != null)
-            {
-                statusText.text = "Not in lobby! Please wait...";
-                statusText.color = Color.red;
-            }
-            return;
-        }
+        // Note: We don't strictly require InLobby here because:
+        // 1. Photon allows creating rooms even when not explicitly in a lobby (uses default lobby)
+        // 2. After a failed operation, player might temporarily not be in lobby but can still create
+        // 3. Photon will handle the lobby state automatically
         
         if (PhotonNetwork.InRoom)
         {
@@ -315,16 +310,10 @@ string roomName = roomNameInput != null && !string.IsNullOrEmpty(roomNameInput.t
             return;
         }
         
-        if (!PhotonNetwork.InLobby)
-        {
-            Debug.LogError("[LobbyManager] Cannot join room - not in lobby!");
-            if (statusText != null)
-            {
-                statusText.text = "Not in lobby! Please wait...";
-                statusText.color = Color.red;
-            }
-            return;
-        }
+        // Note: We don't strictly require InLobby here because:
+        // 1. Photon allows joining rooms even when not explicitly in a lobby (uses default lobby)
+        // 2. After a failed join, player might temporarily not be in lobby but can still join
+        // 3. Photon will handle the lobby state automatically
         
         if (PhotonNetwork.InRoom)
         {
@@ -890,6 +879,14 @@ if (currentPlayers < minPlayers)
             statusText.color = Color.red;
         }
         
+        // After a failed create, Photon may have disconnected us from the lobby
+        // Rejoin the lobby if we're connected but not in lobby
+        if (PhotonNetwork.IsConnectedAndReady && !PhotonNetwork.InLobby && !PhotonNetwork.InRoom)
+        {
+            Debug.Log("[LobbyManager] Rejoining lobby after failed room creation...");
+            StartCoroutine(RejoinLobbyAfterDelay(0.5f));
+        }
+        
         // Stay in lobby panel
         ShowLobbyPanel();
     }
@@ -907,8 +904,34 @@ if (currentPlayers < minPlayers)
             statusText.color = Color.red;
         }
         
+        // After a failed join, Photon may have disconnected us from the lobby
+        // Rejoin the lobby if we're connected but not in lobby
+        if (PhotonNetwork.IsConnectedAndReady && !PhotonNetwork.InLobby && !PhotonNetwork.InRoom)
+        {
+            Debug.Log("[LobbyManager] Rejoining lobby after failed room join...");
+            if (NetworkManager.Instance != null)
+            {
+                // NetworkManager will handle rejoining the lobby
+                StartCoroutine(RejoinLobbyAfterDelay(0.5f));
+            }
+        }
+        
         // Stay in lobby panel
         ShowLobbyPanel();
+    }
+    
+    /// <summary>
+    /// Rejoin lobby after a short delay (used after failed room operations)
+    /// </summary>
+    private IEnumerator RejoinLobbyAfterDelay(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        
+        if (PhotonNetwork.IsConnectedAndReady && !PhotonNetwork.InLobby && !PhotonNetwork.InRoom)
+        {
+            Debug.Log("[LobbyManager] Attempting to rejoin lobby...");
+            PhotonNetwork.JoinLobby();
+        }
     }
     
     #endregion
