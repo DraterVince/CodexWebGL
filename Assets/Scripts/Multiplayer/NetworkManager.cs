@@ -2,6 +2,7 @@ using UnityEngine;
 using Photon.Pun;
 using Photon.Realtime;
 using UnityEngine.SceneManagement;
+using System.Collections;
 
 public class NetworkManager : MonoBehaviourPunCallbacks
 {
@@ -26,6 +27,17 @@ public class NetworkManager : MonoBehaviourPunCallbacks
     public string CurrentRoomName = "";
 
     private bool shouldBeConnected = false;
+    
+    [Header("Connection Retry Settings")]
+    [SerializeField] private int maxLobbyJoinRetries = 3;
+    [SerializeField] private float lobbyJoinRetryDelay = 2f;
+    [SerializeField] private int maxConnectionRetries = 3;
+    [SerializeField] private float connectionRetryDelay = 3f;
+    
+    private int lobbyJoinRetryCount = 0;
+    private int connectionRetryCount = 0;
+    private Coroutine lobbyJoinRetryCoroutine = null;
+    private Coroutine connectionRetryCoroutine = null;
 
     private void Awake()
     {
@@ -158,18 +170,67 @@ public class NetworkManager : MonoBehaviourPunCallbacks
         if (PhotonNetwork.IsConnected)
         {
             Debug.Log("[NetworkManager] Already connected to Photon");
+            // If connected but not in lobby, try joining lobby
+            if (!PhotonNetwork.InLobby && PhotonNetwork.IsConnectedAndReady)
+            {
+                JoinLobbyWithRetry();
+            }
             return;
         }
         
         if (PhotonNetwork.IsConnectedAndReady)
         {
             Debug.Log("[NetworkManager] Already connected and ready");
+            // If connected but not in lobby, try joining lobby
+            if (!PhotonNetwork.InLobby)
+            {
+                JoinLobbyWithRetry();
+            }
             return;
         }
+        
+        // Reset retry counter when manually connecting
+        connectionRetryCount = 0;
         
         Debug.Log("[NetworkManager] Connecting to Photon...");
         PhotonNetwork.GameVersion = gameVersion;
         PhotonNetwork.ConnectUsingSettings();
+    }
+    
+    /// <summary>
+    /// Retry connection with exponential backoff
+    /// </summary>
+    private void RetryConnection()
+    {
+        if (connectionRetryCount >= maxConnectionRetries)
+        {
+            Debug.LogError($"[NetworkManager] Max connection retries ({maxConnectionRetries}) exceeded. Please check your internet connection.");
+            shouldBeConnected = false;
+            return;
+        }
+        
+        connectionRetryCount++;
+        float delay = connectionRetryDelay * connectionRetryCount; // Exponential backoff
+        
+        Debug.Log($"[NetworkManager] Retrying connection ({connectionRetryCount}/{maxConnectionRetries}) in {delay} seconds...");
+        
+        if (connectionRetryCoroutine != null)
+        {
+            StopCoroutine(connectionRetryCoroutine);
+        }
+        connectionRetryCoroutine = StartCoroutine(RetryConnectionCoroutine(delay));
+    }
+    
+    private IEnumerator RetryConnectionCoroutine(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        
+        if (!PhotonNetwork.IsConnected && shouldBeConnected)
+        {
+            Debug.Log("[NetworkManager] Retrying connection...");
+            PhotonNetwork.GameVersion = gameVersion;
+            PhotonNetwork.ConnectUsingSettings();
+        }
     }
 
     public void Disconnect()
@@ -266,8 +327,44 @@ public class NetworkManager : MonoBehaviourPunCallbacks
     {
         Debug.Log("? Connected to Photon Master Server");
         IsConnectedToMaster = true;
+        
+        // Reset retry counters on successful connection
+        connectionRetryCount = 0;
+        if (connectionRetryCoroutine != null)
+        {
+            StopCoroutine(connectionRetryCoroutine);
+            connectionRetryCoroutine = null;
+        }
 
-        PhotonNetwork.JoinLobby();
+        // Join lobby - this will be retried if it fails
+        JoinLobbyWithRetry();
+    }
+    
+    /// <summary>
+    /// Join lobby with retry logic
+    /// </summary>
+    private void JoinLobbyWithRetry()
+    {
+        if (!PhotonNetwork.IsConnectedAndReady)
+        {
+            Debug.LogWarning("[NetworkManager] Cannot join lobby - not connected and ready");
+            return;
+        }
+        
+        Debug.Log("[NetworkManager] Attempting to join lobby...");
+        bool success = PhotonNetwork.JoinLobby();
+        
+        if (!success)
+        {
+            Debug.LogWarning("[NetworkManager] JoinLobby() returned false, will check timeout");
+        }
+        
+        // Start timeout check - if we don't get OnJoinedLobby callback within the delay, retry
+        if (lobbyJoinRetryCoroutine != null)
+        {
+            StopCoroutine(lobbyJoinRetryCoroutine);
+        }
+        lobbyJoinRetryCoroutine = StartCoroutine(CheckLobbyJoinTimeout());
     }
 
     public override void OnDisconnected(DisconnectCause cause)
@@ -275,18 +372,84 @@ public class NetworkManager : MonoBehaviourPunCallbacks
         Debug.Log($"? Disconnected from Photon: {cause}");
         IsConnectedToMaster = false;
         IsInLobby = false;
+        
+        // Stop any retry coroutines
+        if (lobbyJoinRetryCoroutine != null)
+        {
+            StopCoroutine(lobbyJoinRetryCoroutine);
+            lobbyJoinRetryCoroutine = null;
+        }
+        if (connectionRetryCoroutine != null)
+        {
+            StopCoroutine(connectionRetryCoroutine);
+            connectionRetryCoroutine = null;
+        }
+        
+        // If we should be connected and it wasn't a manual disconnect, retry connection
+        if (shouldBeConnected && cause != DisconnectCause.DisconnectByClientLogic)
+        {
+            Debug.Log($"[NetworkManager] Unexpected disconnect ({cause}), will retry connection...");
+            RetryConnection();
+        }
     }
 
     public override void OnJoinedLobby()
     {
         Debug.Log("? Joined Photon Lobby");
         IsInLobby = true;
+        
+        // Reset retry counter on successful join
+        lobbyJoinRetryCount = 0;
+        if (lobbyJoinRetryCoroutine != null)
+        {
+            StopCoroutine(lobbyJoinRetryCoroutine);
+            lobbyJoinRetryCoroutine = null;
+        }
+    }
+    
+    /// <summary>
+    /// Check if lobby join failed by checking if we're still not in lobby after a timeout
+    /// </summary>
+    private IEnumerator CheckLobbyJoinTimeout()
+    {
+        yield return new WaitForSeconds(lobbyJoinRetryDelay);
+        
+        // If we're connected but not in lobby, the join likely failed
+        if (PhotonNetwork.IsConnectedAndReady && !PhotonNetwork.InLobby)
+        {
+            Debug.LogWarning("[NetworkManager] Lobby join appears to have failed - not in lobby after timeout");
+            
+            // Retry joining lobby if we haven't exceeded max retries
+            if (lobbyJoinRetryCount < maxLobbyJoinRetries)
+            {
+                lobbyJoinRetryCount++;
+                Debug.Log($"[NetworkManager] Retrying lobby join ({lobbyJoinRetryCount}/{maxLobbyJoinRetries})...");
+                JoinLobbyWithRetry();
+            }
+            else
+            {
+                Debug.LogError($"[NetworkManager] Max lobby join retries ({maxLobbyJoinRetries}) exceeded. Connection may be unstable.");
+                IsInLobby = false;
+            }
+        }
+        else if (!PhotonNetwork.IsConnectedAndReady)
+        {
+            Debug.LogWarning("[NetworkManager] Cannot retry lobby join - not connected and ready. Retrying connection...");
+            RetryConnection();
+        }
     }
 
     public override void OnLeftLobby()
     {
         Debug.Log("Left Photon Lobby");
         IsInLobby = false;
+        
+        // Stop retry coroutine if leaving lobby
+        if (lobbyJoinRetryCoroutine != null)
+        {
+            StopCoroutine(lobbyJoinRetryCoroutine);
+            lobbyJoinRetryCoroutine = null;
+        }
     }
 
     public override void OnCreatedRoom()

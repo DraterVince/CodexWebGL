@@ -91,7 +91,22 @@ SetupButtons();
     {
      if (statusText != null && NetworkManager.Instance != null)
         {
-  statusText.text = NetworkManager.Instance.GetConnectionStatus();
+            string status = NetworkManager.Instance.GetConnectionStatus();
+            statusText.text = status;
+            
+            // Update status text color based on connection state
+            if (PhotonNetwork.InLobby)
+            {
+                statusText.color = Color.green;
+            }
+            else if (PhotonNetwork.IsConnected)
+            {
+                statusText.color = Color.yellow;
+            }
+            else
+            {
+                statusText.color = Color.white;
+            }
         }
 
    if (PhotonNetwork.InRoom)
@@ -102,6 +117,16 @@ SetupButtons();
     if (lobbyInfoText != null && PhotonNetwork.InLobby)
         {
         lobbyInfoText.text = $"In Lobby - {PhotonNetwork.CountOfPlayers} players online";
+     }
+     
+     // Ensure UI panels match connection state
+     if (PhotonNetwork.InLobby && lobbyPanel != null && !lobbyPanel.activeSelf && !PhotonNetwork.InRoom)
+     {
+         ShowLobbyPanel();
+     }
+     else if (!PhotonNetwork.InLobby && !PhotonNetwork.IsConnected && connectionPanel != null && !connectionPanel.activeSelf && !PhotonNetwork.InRoom)
+     {
+         ShowConnectionPanel();
      }
     }
 
@@ -226,11 +251,41 @@ SetupButtons();
             NetworkManager.Instance.ConnectToPhoton();
         }
 
-        ShowLobbyPanel();
+        // Don't show lobby panel immediately - wait for actual connection
+        // The panel will be shown in OnJoinedLobby callback
     }
 
     private void OnCreateRoomButtonClicked()
     {
+        // Validate connection state before creating room
+        if (!PhotonNetwork.IsConnectedAndReady)
+        {
+            Debug.LogError("[LobbyManager] Cannot create room - not connected and ready!");
+            if (statusText != null)
+            {
+                statusText.text = "Not connected! Please wait...";
+                statusText.color = Color.red;
+            }
+            return;
+        }
+        
+        if (!PhotonNetwork.InLobby)
+        {
+            Debug.LogError("[LobbyManager] Cannot create room - not in lobby!");
+            if (statusText != null)
+            {
+                statusText.text = "Not in lobby! Please wait...";
+                statusText.color = Color.red;
+            }
+            return;
+        }
+        
+        if (PhotonNetwork.InRoom)
+        {
+            Debug.LogWarning("[LobbyManager] Already in a room!");
+            return;
+        }
+        
 string roomName = roomNameInput != null && !string.IsNullOrEmpty(roomNameInput.text) 
             ? roomNameInput.text 
             : "Room_" + Random.Range(1000, 9999);
@@ -248,6 +303,35 @@ string roomName = roomNameInput != null && !string.IsNullOrEmpty(roomNameInput.t
 
     private void OnJoinRoomButtonClicked()
     {
+        // Validate connection state before joining room
+        if (!PhotonNetwork.IsConnectedAndReady)
+        {
+            Debug.LogError("[LobbyManager] Cannot join room - not connected and ready!");
+            if (statusText != null)
+            {
+                statusText.text = "Not connected! Please wait...";
+                statusText.color = Color.red;
+            }
+            return;
+        }
+        
+        if (!PhotonNetwork.InLobby)
+        {
+            Debug.LogError("[LobbyManager] Cannot join room - not in lobby!");
+            if (statusText != null)
+            {
+                statusText.text = "Not in lobby! Please wait...";
+                statusText.color = Color.red;
+            }
+            return;
+        }
+        
+        if (PhotonNetwork.InRoom)
+        {
+            Debug.LogWarning("[LobbyManager] Already in a room!");
+            return;
+        }
+        
         string roomName = roomNameInput != null ? roomNameInput.text : "";
       
         if (!string.IsNullOrEmpty(roomName))
@@ -260,6 +344,11 @@ string roomName = roomNameInput != null && !string.IsNullOrEmpty(roomNameInput.t
         else
         {
             Debug.LogWarning("Please enter a room name!");
+            if (statusText != null)
+            {
+                statusText.text = "Please enter a room name!";
+                statusText.color = Color.yellow;
+            }
         }
     }
 
@@ -695,7 +784,38 @@ if (currentPlayers < minPlayers)
 
     #endregion
     
- #region Photon Callbacks
+    #region Photon Callbacks
+    
+    /// <summary>
+    /// Called when successfully joined the lobby
+    /// </summary>
+    public override void OnJoinedLobby()
+    {
+        Debug.Log("[LobbyManager] Successfully joined lobby - showing lobby panel");
+        ShowLobbyPanel();
+        
+        // Update status text if available
+        if (statusText != null)
+        {
+            statusText.text = "Connected to Lobby";
+            statusText.color = Color.green;
+        }
+    }
+    
+    /// <summary>
+    /// Called when disconnected from Photon
+    /// </summary>
+    public override void OnDisconnected(DisconnectCause cause)
+    {
+        Debug.Log($"[LobbyManager] Disconnected: {cause}");
+        ShowConnectionPanel();
+        
+        // Reset ready state
+        isLocalPlayerReady = false;
+        
+        // Clear dynamic player list
+        ClearDynamicPlayerList();
+    }
     
     /// <summary>
     /// Called when a player joins the room
@@ -755,6 +875,40 @@ if (currentPlayers < minPlayers)
         {
         UpdateRoomUI();
         }
+    }
+    
+    /// <summary>
+    /// Called when room creation fails
+    /// </summary>
+    public override void OnCreateRoomFailed(short returnCode, string message)
+    {
+        Debug.LogError($"[LobbyManager] Failed to create room: {message} (ReturnCode: {returnCode})");
+        
+        if (statusText != null)
+        {
+            statusText.text = $"Failed to create room: {message}";
+            statusText.color = Color.red;
+        }
+        
+        // Stay in lobby panel
+        ShowLobbyPanel();
+    }
+    
+    /// <summary>
+    /// Called when room join fails
+    /// </summary>
+    public override void OnJoinRoomFailed(short returnCode, string message)
+    {
+        Debug.LogError($"[LobbyManager] Failed to join room: {message} (ReturnCode: {returnCode})");
+        
+        if (statusText != null)
+        {
+            statusText.text = $"Failed to join room: {message}";
+            statusText.color = Color.red;
+        }
+        
+        // Stay in lobby panel
+        ShowLobbyPanel();
     }
     
     #endregion
