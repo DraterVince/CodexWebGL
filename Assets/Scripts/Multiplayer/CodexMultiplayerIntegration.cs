@@ -457,13 +457,59 @@ hasTimedOut = true; // Set flag immediately to prevent multiple calls
     {
         base.OnPlayerLeftRoom(otherPlayer);
 
-        // If it was the current player's turn, move to next
-        if (PhotonNetwork.IsMasterClient)
+        // CRITICAL: Validate turn index after player leaves
+        // The player list has changed, so we need to check if currentPlayerTurn is still valid
+        if (PhotonNetwork.IsMasterClient && PhotonNetwork.InRoom)
         {
-            Player currentTurnPlayer = GetCurrentTurnPlayer();
-            if (currentTurnPlayer != null && currentTurnPlayer.ActorNumber == otherPlayer.ActorNumber)
+            // Check if current turn index is still valid
+            if (currentPlayerTurn >= PhotonNetwork.PlayerList.Length)
             {
-                NextTurn();
+                // Turn index is out of range - reset to first player
+                Debug.LogWarning($"[CodexMultiplayerIntegration] Turn index {currentPlayerTurn} out of range after player left. Resetting to 0.");
+                currentPlayerTurn = 0;
+                
+                // Update room properties
+                ExitGames.Client.Photon.Hashtable roomProps = new ExitGames.Client.Photon.Hashtable
+                {
+                    { "CurrentTurn", currentPlayerTurn },
+                    { "TurnStartTime", (float)PhotonNetwork.Time }
+                };
+                PhotonNetwork.CurrentRoom.SetCustomProperties(roomProps);
+                
+                // Notify all clients of turn change
+                photonView.RPC("RPC_TurnChanged", RpcTarget.All, currentPlayerTurn);
+            }
+            else
+            {
+                // Check if it was the current player's turn
+                Player currentTurnPlayer = GetCurrentTurnPlayer();
+                if (currentTurnPlayer != null && currentTurnPlayer.ActorNumber == otherPlayer.ActorNumber)
+                {
+                    // The player whose turn it was just left - move to next
+                    Debug.Log($"[CodexMultiplayerIntegration] Player {otherPlayer.NickName} left during their turn - advancing to next player");
+                    NextTurn();
+                }
+                else
+                {
+                    // A different player left - just update the turn index if needed
+                    // Recalculate turn index based on remaining players
+                    for (int i = 0; i < PhotonNetwork.PlayerList.Length; i++)
+                    {
+                        if (PhotonNetwork.PlayerList[i].ActorNumber == otherPlayer.ActorNumber)
+                        {
+                            // This shouldn't happen - player should be removed from list
+                            Debug.LogWarning($"[CodexMultiplayerIntegration] Player {otherPlayer.NickName} still in player list after leaving!");
+                        }
+                    }
+                    
+                    // Adjust turn index if needed (if a player before current turn left)
+                    // For simplicity, just validate the current turn index is still valid
+                    if (currentPlayerTurn >= 0 && currentPlayerTurn < PhotonNetwork.PlayerList.Length)
+                    {
+                        // Turn index is still valid - no change needed
+                        Debug.Log($"[CodexMultiplayerIntegration] Player {otherPlayer.NickName} left, but turn index {currentPlayerTurn} is still valid");
+                    }
+                }
             }
         }
     }

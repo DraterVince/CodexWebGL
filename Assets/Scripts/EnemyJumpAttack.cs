@@ -204,9 +204,14 @@ if (useSpriteAnimation && characterAnimator != null)
     {
         isAnimating = true;
  
-        // Update original position before attack to ensure we return to the correct position
-        originalPosition = transform.position;
-        Vector3 startPosition = originalPosition;
+        // CRITICAL: Store original position and rotation BEFORE any movement
+        // This must be the enemy's current position when attack starts
+        Vector3 startPosition = transform.position;
+        Quaternion startRotation = transform.rotation;
+        
+        // Update stored original position for return journey
+        originalPosition = startPosition;
+        originalRotation = startRotation;
         
         // Calculate direction from enemy to player
         Vector3 directionToTarget = (targetPosition - startPosition);
@@ -241,39 +246,34 @@ if (useSpriteAnimation && characterAnimator != null)
         
         directionToTarget = directionToTarget.normalized;
         
-        // Calculate attack position - enemy should jump TOWARDS player
-        // The attack position should be a point between enemy and player, at attackDistance from player
-        // If enemy is very close (< attackDistance), jump to 80% of the way to player
-        // If enemy is far away, jump to a point that's attackDistance away from player
-        float jumpDistance;
-        if (distanceToTarget <= attackDistance)
+        // Calculate attack position - enemy should jump TOWARDS player but stop at attackDistance
+        // attackPosition should be a point on the line from startPosition to targetPosition
+        // that is attackDistance away from targetPosition
+        Vector3 attackPosition;
+        
+        if (distanceToTarget > attackDistance)
         {
-            // Enemy is already close - jump 80% of the way to player
-            jumpDistance = distanceToTarget * 0.8f;
+            // Enemy is far - jump to a point that's attackDistance away from player
+            // This ensures the enemy stops at the correct distance from the player
+            attackPosition = targetPosition - (directionToTarget * attackDistance);
         }
         else
         {
-            // Enemy is far - jump to a point that's attackDistance away from player
-            jumpDistance = distanceToTarget - attackDistance;
+            // Enemy is close - jump 80% of the way to player (don't overshoot)
+            attackPosition = startPosition + (directionToTarget * (distanceToTarget * 0.8f));
         }
         
-        // Ensure minimum jump distance
-        jumpDistance = Mathf.Max(0.5f, jumpDistance);
-        
-        // Calculate attack position from enemy's starting position
-        Vector3 attackPosition = startPosition + (directionToTarget * jumpDistance);
-        
-        // Make sure we don't overshoot the player
-        float finalDistanceToPlayer = Vector3.Distance(attackPosition, targetPosition);
-        if (finalDistanceToPlayer < attackDistance * 0.5f)
+        // Ensure attack position doesn't go past the player (safety check)
+        float distanceFromStartToAttack = Vector3.Distance(startPosition, attackPosition);
+        if (distanceFromStartToAttack > distanceToTarget)
         {
-            // If we're too close, adjust to be exactly attackDistance away
-            Vector3 directionFromAttackToPlayer = (targetPosition - attackPosition).normalized;
-            attackPosition = targetPosition - (directionFromAttackToPlayer * attackDistance);
+            // Clamp attack position to not exceed target (shouldn't happen, but safety check)
+            attackPosition = startPosition + (directionToTarget * (distanceToTarget * 0.9f));
+            Debug.LogWarning($"[EnemyJumpAttack] {gameObject.name}: Attack position was past player! Clamped to {attackPosition}");
         }
         
         Debug.Log($"[EnemyJumpAttack] {gameObject.name}: Enemy at {startPosition}, Player at {targetPosition}, Distance: {distanceToTarget:F2}");
-        Debug.Log($"[EnemyJumpAttack] Jump distance: {jumpDistance:F2}, Attack position: {attackPosition}, Final distance to player: {Vector3.Distance(attackPosition, targetPosition):F2}");
+        Debug.Log($"[EnemyJumpAttack] Attack position: {attackPosition}, Final distance to player: {Vector3.Distance(attackPosition, targetPosition):F2}, Return to: {originalPosition}");
         
         // Make enemy face the player before jumping - use sprite flipping for 2D sprites
         // For 2D sprites, flip horizontally instead of rotating to avoid upside-down sprites

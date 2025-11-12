@@ -736,23 +736,18 @@ if (prefab != null)
             Vector3 startPos = currentCharacterInstance.transform.position;
             Vector3 targetPos = offScreenLeft;
             
+            // Use fixed duration instead of speed-based to ensure smooth animation
+            float duration = 0.5f; // 0.5 seconds for slide animation
             float elapsed = 0f;
-            float duration = 1f / characterSlideSpeed;
             
-            Log($"Sliding out current character from {startPos} to {targetPos}");
-            while (elapsed < duration)
+            Log($"Sliding out current character from {startPos} to {targetPos} over {duration}s");
+            while (elapsed < duration && currentCharacterInstance != null)
             {
                 elapsed += Time.deltaTime;
-                float t = elapsed / duration;
-                if (currentCharacterInstance != null)
-                {
-                    currentCharacterInstance.transform.position = Vector3.Lerp(startPos, targetPos, t);
-                }
-                else
-                {
-                    LogWarning("Current character instance became null during slide out");
-                    break;
-                }
+                float t = Mathf.Clamp01(elapsed / duration);
+                // Use smooth step for better easing
+                float smoothT = t * t * (3f - 2f * t);
+                currentCharacterInstance.transform.position = Vector3.Lerp(startPos, targetPos, smoothT);
                 yield return null;
             }
             
@@ -781,22 +776,17 @@ if (prefab != null)
         Vector3 slideInStartPos = offScreenRight;
         Vector3 slideInTargetPos = characterDisplayPosition.position;
         
+        // Use fixed duration instead of speed-based to ensure smooth animation
+        float slideInDuration = 0.5f; // 0.5 seconds for slide animation
         float slideInElapsed = 0f;
-        float slideInDuration = 1f / characterSlideSpeed;
         
-        while (slideInElapsed < slideInDuration)
+        while (slideInElapsed < slideInDuration && currentCharacterInstance != null)
         {
             slideInElapsed += Time.deltaTime;
-            float t = slideInElapsed / slideInDuration;
-            if (currentCharacterInstance != null)
-            {
-                currentCharacterInstance.transform.position = Vector3.Lerp(slideInStartPos, slideInTargetPos, t);
-            }
-            else
-            {
-                LogWarning("Current character instance became null during slide in");
-                break;
-            }
+            float t = Mathf.Clamp01(slideInElapsed / slideInDuration);
+            // Use smooth step for better easing
+            float smoothT = t * t * (3f - 2f * t);
+            currentCharacterInstance.transform.position = Vector3.Lerp(slideInStartPos, slideInTargetPos, smoothT);
             yield return null;
         }
         
@@ -1516,22 +1506,27 @@ playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
             // BUT: Check bounds to prevent index out of range errors
             if (cardManager != null)
             {
-                // Check if we can safely increment the counter
+                // Check bounds BEFORE incrementing
                 int maxCounter = Mathf.Min(cardManager.cardContainer.Count, cardManager.cardDisplayContainer.Count) - 1;
-                int newCounter = cardManager.counter + 1;
-                
-                if (newCounter <= maxCounter && newCounter >= 0)
+                if (maxCounter < 0)
                 {
-                    cardManager.counter = newCounter;
-                    Log($"CardManager counter incremented to {cardManager.counter} after correct answer (Max: {maxCounter})");
+                    LogError($"CardManager has no card containers! Cannot increment counter.");
                 }
                 else
                 {
-                    LogWarning($"Cannot increment card counter - would go out of range! Current: {cardManager.counter}, New: {newCounter}, Max: {maxCounter}");
-                    LogWarning($"CardContainer count: {cardManager.cardContainer.Count}, CardDisplayContainer count: {cardManager.cardDisplayContainer.Count}");
-                    // Clamp counter to max value to prevent out of range errors
+                    // Clamp current counter to valid range first
                     cardManager.counter = Mathf.Clamp(cardManager.counter, 0, maxCounter);
-                    LogWarning($"Counter clamped to {cardManager.counter} - reusing last available card set");
+                    
+                    // Check if we can safely increment
+                    if (cardManager.counter < maxCounter)
+                    {
+                        cardManager.counter++;
+                        Log($"CardManager counter incremented to {cardManager.counter} after correct answer (Max: {maxCounter})");
+                    }
+                    else
+                    {
+                        LogWarning($"Card counter already at max ({maxCounter}) - reusing last available card set");
+                    }
                 }
             }
             
@@ -1584,22 +1579,27 @@ playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
         // BUT: Check bounds to prevent index out of range errors
         if (cardManager != null)
         {
-            // Check if we can safely increment the counter
+            // Check bounds BEFORE incrementing
             int maxCounter = Mathf.Min(cardManager.cardContainer.Count, cardManager.cardDisplayContainer.Count) - 1;
-            int newCounter = cardManager.counter + 1;
-            
-            if (newCounter <= maxCounter && newCounter >= 0)
+            if (maxCounter < 0)
             {
-                cardManager.counter = newCounter;
-                Log($"CardManager counter incremented to {cardManager.counter} for next question (Max: {maxCounter})");
+                LogError($"CardManager has no card containers! Cannot increment counter after enemy defeat.");
             }
             else
             {
-                LogWarning($"Cannot increment card counter after enemy defeat - would go out of range! Current: {cardManager.counter}, New: {newCounter}, Max: {maxCounter}");
-                LogWarning($"CardContainer count: {cardManager.cardContainer.Count}, CardDisplayContainer count: {cardManager.cardDisplayContainer.Count}");
-                // Clamp counter to max value to prevent out of range errors
+                // Clamp current counter to valid range first
                 cardManager.counter = Mathf.Clamp(cardManager.counter, 0, maxCounter);
-                LogWarning($"Counter clamped to {cardManager.counter} - reusing last available card set");
+                
+                // Check if we can safely increment
+                if (cardManager.counter < maxCounter)
+                {
+                    cardManager.counter++;
+                    Log($"CardManager counter incremented to {cardManager.counter} for next question (Max: {maxCounter})");
+                }
+                else
+                {
+                    LogWarning($"Card counter already at max ({maxCounter}) after enemy defeat - reusing last available card set");
+                }
             }
         }
         
