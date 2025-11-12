@@ -66,24 +66,12 @@ public class PlayCardButton : MonoBehaviour
 
         DetectMultiplayerMode();
         
-        // CRITICAL: Disable singleplayer player character if in multiplayer mode
-        // Multiplayer uses SharedMultiplayerGameManager's character switching system instead
-        if (isMultiplayerMode)
+        // Setup player character for both singleplayer and multiplayer
+        // In multiplayer, all players share control of the same character
+        if (playerCharacter != null)
         {
-            if (playerCharacter != null)
-            {
-                playerCharacter.SetActive(false);
-                Debug.Log($"[PlayCardButton] Disabled singleplayer player character '{playerCharacter.name}' - multiplayer mode uses character switching system");
-            }
-        }
-        else
-        {
-            // Singleplayer mode - enable and setup player character
-            if (playerCharacter != null)
-            {
-                playerCharacter.SetActive(true);
-                playerJumpAttack = playerCharacter.GetComponent<CharacterJumpAttack>();
-            }
+            playerCharacter.SetActive(true);
+            playerJumpAttack = playerCharacter.GetComponent<CharacterJumpAttack>();
         }
     }
 

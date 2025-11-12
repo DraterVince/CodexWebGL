@@ -145,53 +145,21 @@ enabled = false;
         InitializeUI();
         UpdatePlayerListUI();
         
-        // Load characters FIRST, then initialize turn system if master client
-        // This ensures characters are ready when OnTurnChanged is called
+        // CRITICAL: In multiplayer, all players share the same character
+        // No character loading/switching needed - just use PlayCardButton.playerCharacter
         if (PhotonNetwork.IsMasterClient)
         {
             InitializeSharedHealth();
-            StartCoroutine(LoadCharactersThenInitializeTurnSystem());
+            // Initialize turn system immediately - no character loading needed
+            if (turnSystem != null)
+            {
+                turnSystem.InitializeTurnSystem();
+            }
+            else
+            {
+                LogError("Cannot initialize - turn system component is missing!");
+            }
         }
-        else
-        {
-            // Non-master clients just load characters
-            StartCoroutine(LoadPlayerCharacters());
-        }
-    }
-    
-    private System.Collections.IEnumerator LoadCharactersThenInitializeTurnSystem()
-    {
-        // Load characters first
-        yield return StartCoroutine(LoadPlayerCharacters());
-        
-        // Wait a bit more to ensure characters are fully instantiated
-        yield return new WaitForSeconds(0.2f);
-        
-        // Now initialize turn system - characters should be loaded by now
-        if (turnSystem != null)
-        {
-            Log("Manually initializing turn system (characters loaded)");
-            turnSystem.InitializeTurnSystem();
-        }
-        else
-        {
-            LogError("Cannot initialize - turn system component is missing!");
-        }
-    }
-    
-    private System.Collections.IEnumerator InitializeTurnSystemDelayed()
- {
-     yield return new WaitForSeconds(0.5f);
-        
-        if (turnSystem != null)
-        {
- Log("Manually initializing turn system");
-      turnSystem.InitializeTurnSystem();
-        }
-        else
-        {
- LogError("Cannot initialize - turn system component is missing!");
-    }
     }
     
     private void HideMultiplayerUI()
@@ -1033,16 +1001,16 @@ if (prefab != null)
         Log($"Local Player ActorNumber: {PhotonNetwork.LocalPlayer.ActorNumber}");
         Log($"Is my turn: {isMyTurn}");
 
-        // Switch to new player's character (with retry if not loaded yet)
-        if (playerCharacters.ContainsKey(player.ActorNumber))
+        // CRITICAL: In multiplayer, all players share the same character
+        // No character switching needed - just use PlayCardButton.playerCharacter
+        // Ensure the character reference is updated for attacks
+        if (playCardButton != null && playCardButton.playerCharacter != null)
         {
-            ShowCharacter(player.ActorNumber, true);
-        }
-        else
-        {
-            LogWarning($"Character for actor {player.ActorNumber} not loaded yet - will retry");
-            // Retry showing character after a delay if characters are still loading
-            StartCoroutine(RetryShowCharacterAfterDelay(player.ActorNumber, true, 0.5f));
+            // Update playerJumpAttack reference if needed
+            if (playCardButton.playerJumpAttack == null)
+            {
+                playCardButton.playerJumpAttack = playCardButton.playerCharacter.GetComponent<CharacterJumpAttack>();
+            }
         }
   
         // Update UI
@@ -1470,368 +1438,325 @@ Log($"RPC_SyncCardCounter - Setting counter to {newCounter}");
     [PunRPC]
     void RPC_OnCardPlayed(int playerActorNumber, bool wasCorrect)
     {
- Log($"RPC_OnCardPlayed received - Player: {playerActorNumber}, Correct: {wasCorrect}");
+        Log($"RPC_OnCardPlayed received - Player: {playerActorNumber}, Correct: {wasCorrect}");
         
-   if (wasCorrect)
+        if (wasCorrect)
         {
-          // CORRECT ANSWER - Trigger player attack animation on all clients
-          
-  bool hasAnimation = false;
-   if (playCardButton != null && playCardButton.useJumpAttackAnimation && 
-    playCardButton.enemyManager != null &&
-   playCardButton.enemyManager.counter < playCardButton.enemyManager.enemies.Count)
-       {
-     GameObject currentEnemy = playCardButton.enemyManager.enemies[playCardButton.enemyManager.counter];
-        
- if (currentEnemy != null)
-        {
-           // CRITICAL: Use currentCharacterInstance instead of playCardButton.playerCharacter
-           // This ensures we're using the currently displayed character, not a stale reference
-           GameObject characterToUse = currentCharacterInstance != null ? currentCharacterInstance : playCardButton.playerCharacter;
-           
-           if (characterToUse != null)
-           {
-               CharacterJumpAttack jumpAttack = characterToUse.GetComponent<CharacterJumpAttack>();
-               if (jumpAttack == null)
-               {
-                   jumpAttack = characterToUse.GetComponentInChildren<CharacterJumpAttack>();
-               }
-               
-               if (jumpAttack != null)
-               {
-                   hasAnimation = true;
-                   
-                   // Update playCardButton reference for consistency
-                   playCardButton.playerCharacter = characterToUse;
-                   playCardButton.playerJumpAttack = jumpAttack;
-                   
-                   Log($"Triggering player jump attack on {characterToUse.name} targeting enemy {currentEnemy.name}");
-                   
-                   // CRITICAL: Store the character instance and actor number for slide-out animation
-                   // We need to capture these BEFORE the coroutine starts, as the character might change
-                   GameObject attackingCharacter = characterToUse;
-                   
-                   // Get the actor number of the player who owns this character
-                   // Find which player this character belongs to
-                   int attackingActorNumber = -1;
-                   foreach (var kvp in playerCharacters)
-                   {
-                       if (kvp.Value == characterToUse)
-                       {
-                           attackingActorNumber = kvp.Key;
-                           break;
-                       }
-                   }
-                   
-                   if (attackingActorNumber < 0)
-                   {
-                       // Fallback: use the player who played the card (from RPC parameter)
-                       attackingActorNumber = playerActorNumber;
-                   }
-                   
-                   Log($"Stored attacking character: {attackingCharacter.name} for actor {attackingActorNumber}");
-                   Log($"Character position: {attackingCharacter.transform.position}, Enemy position: {currentEnemy.transform.position}");
-                   
-                   // Trigger player jump attack animation on ALL clients
-                   // The character GameObject itself will move to the enemy position
-                   jumpAttack.PerformJumpAttack(currentEnemy.transform, () => {
-                       Log($"Attack animation callback invoked for character {attackingCharacter?.name}");
-                       
-                       // Master Client applies damage
-                       if (PhotonNetwork.IsMasterClient)
-                       {
-                           // Validate enemy index before accessing array
-                           int enemyIndex = playCardButton.enemyManager.counter;
-                           if (enemyIndex >= 0 && enemyIndex < playCardButton.enemyHealthAmount.Count)
-                           {
-                               playCardButton.EnemyTakeDamage(1f);
-                               
-                               // Sync enemy health to all clients
-                               float newHealth = playCardButton.enemyHealthAmount[enemyIndex];
-                               photonView.RPC("RPC_SyncEnemyHealth", RpcTarget.All, enemyIndex, newHealth);
-                               
-                               Log("Player attack animation complete - enemy damaged");
-                           }
-                           else
-                           {
-                               LogError($"Invalid enemy index {enemyIndex} when trying to apply damage! Health array count: {playCardButton.enemyHealthAmount.Count}");
-                           }
-                       }
-                       else
-                       {
-                           Log("Non-master: Player attack animation complete (visual only)");
-                       }
-                       
-                       // CRITICAL: After attack completes, slide character off screen on ALL clients
-                       // Then advance turn (master client only)
-                       // The character should now be at the enemy position after the jump attack
-                       if (attackingCharacter != null)
-                       {
-                           Log($"Starting slide-off animation for character {attackingCharacter.name} (actor {attackingActorNumber})");
-                           Log($"Character position before slide: {attackingCharacter.transform.position}");
-                           Log($"Character is current character: {attackingCharacter == currentCharacterInstance}");
-                           
-                           // Start slide-off animation on ALL clients
-                           // This ensures visual consistency across all clients
-                           StartCoroutine(SlideCharacterOffScreenThenAdvanceTurn(attackingCharacter, attackingActorNumber));
-                       }
-                       else
-                       {
-                           LogError("Attacking character is null in attack callback! Cannot slide off screen.");
-                           // Still advance turn if master client
-                           if (PhotonNetwork.IsMasterClient)
-                           {
-                               StartCoroutine(AdvanceTurnAfterDelay(0.5f));
-                           }
-                       }
-                   });
-               }
-               else
-               {
-                   LogWarning($"Character {characterToUse.name} has no CharacterJumpAttack component - cannot perform jump attack");
-               }
-           }
-           else
-           {
-               LogError("Cannot perform jump attack - no character reference available!");
-           }
-    }
-     }
-     
-    if (!hasAnimation)
-        {
-          // No animation - apply damage immediately on Master Client
-   if (PhotonNetwork.IsMasterClient)
-  {
-    playCardButton.EnemyTakeDamage(1f);
-  
-     // Sync enemy health to all clients
-  int enemyIndex = playCardButton.enemyManager.counter;
-  float newHealth = playCardButton.enemyHealthAmount[enemyIndex];
-        photonView.RPC("RPC_SyncEnemyHealth", RpcTarget.All, enemyIndex, newHealth);
-  
-      Log("No animation - enemy damaged immediately");
-    }
-   }
-        
-        // Sync correct answer to all players
-        // Get the answer index from the current counter before it was incremented
-        if (playCardButton != null && playCardButton.outputManager != null)
-        {
-            int outputIndex = playCardButton.outputManager.counter;
-            // The answer index should be passed from PlayCardButton, but we'll use counter as fallback
-            // This will be synced via SyncCardState which is called from PlayCardButton
-            Log($"Correct answer played - will sync answer list for output {outputIndex}");
-        }
-        
-        Log($"===== CORRECT ANSWER: RPC_SyncEnemyHealth will handle turn advancement =====");
-        // NOTE: Turn advancement for correct answers is handled in RPC_SyncEnemyHealth
-        // This ensures the turn advances whether the enemy dies or survives
- }
-  else
-   {
-       // WRONG ANSWER - Trigger enemy attack animation and damage shared health
-          if (PhotonNetwork.IsMasterClient)
-      {
-           Log("Master Client damaging shared health");
-          
-           // Find the player character and enemy to trigger attack animation
-       bool hasAnimation = false;
-       if (playCardButton != null && playCardButton.playerCharacter != null && 
- playCardButton.enemyManager.counter < playCardButton.enemyManager.enemies.Count)
-       {
-GameObject currentEnemy = playCardButton.enemyManager.enemies[playCardButton.enemyManager.counter];
-   EnemyJumpAttack enemyJumpAttack = currentEnemy.GetComponent<EnemyJumpAttack>();
-
-        if (enemyJumpAttack != null)
-    {
-          hasAnimation = true;
- delayHealthUIUpdate = true;
-     
-          // CRITICAL: Ensure player character is valid and in the correct position
-            if (playCardButton.playerCharacter == null)
+            // CORRECT ANSWER - Trigger player attack animation on all clients
+            
+            bool hasAnimation = false;
+            if (playCardButton != null && playCardButton.useJumpAttackAnimation && 
+                playCardButton.enemyManager != null &&
+                playCardButton.enemyManager.counter < playCardButton.enemyManager.enemies.Count)
             {
-                LogError("Cannot trigger enemy attack - playerCharacter is NULL!");
-                hasAnimation = false;
-            }
-            else
-            {
-                // Update enemy's original position before attack to ensure correct return position
-                enemyJumpAttack.UpdateOriginalPosition();
+                GameObject currentEnemy = playCardButton.enemyManager.enemies[playCardButton.enemyManager.counter];
                 
-                // CRITICAL: Use currentCharacterInstance if available, otherwise use playCardButton reference
-                // This ensures we're always using the correct, currently displayed character
-                GameObject targetCharacter = currentCharacterInstance != null ? currentCharacterInstance : playCardButton.playerCharacter;
-                
-                if (targetCharacter == null)
+                if (currentEnemy != null && playCardButton.playerCharacter != null)
                 {
-                    LogError("Cannot trigger enemy attack - no valid character reference!");
-                    hasAnimation = false;
+                    // CRITICAL: Use playCardButton.playerCharacter directly (shared character for all players)
+                    CharacterJumpAttack jumpAttack = playCardButton.playerJumpAttack;
+                    if (jumpAttack == null)
+                    {
+                        jumpAttack = playCardButton.playerCharacter.GetComponent<CharacterJumpAttack>();
+                        if (jumpAttack == null)
+                        {
+                            jumpAttack = playCardButton.playerCharacter.GetComponentInChildren<CharacterJumpAttack>();
+                        }
+                        playCardButton.playerJumpAttack = jumpAttack;
+                    }
+                    
+                    if (jumpAttack != null)
+                    {
+                        hasAnimation = true;
+                        
+                        Log($"Triggering player jump attack on {playCardButton.playerCharacter.name} targeting enemy {currentEnemy.name}");
+                        Log($"Character position: {playCardButton.playerCharacter.transform.position}, Enemy position: {currentEnemy.transform.position}");
+                        
+                        // Trigger player jump attack animation on ALL clients
+                        // In multiplayer, all players share the same character - no character switching needed
+                        jumpAttack.PerformJumpAttack(currentEnemy.transform, () => {
+                            Log($"Attack animation callback invoked for character {playCardButton.playerCharacter?.name}");
+                            
+                            // Master Client applies damage
+                            if (PhotonNetwork.IsMasterClient)
+                            {
+                                // Validate enemy index before accessing array
+                                int enemyIndex = playCardButton.enemyManager.counter;
+                                if (enemyIndex >= 0 && enemyIndex < playCardButton.enemyHealthAmount.Count)
+                                {
+                                    playCardButton.EnemyTakeDamage(1f);
+                                    
+                                    // Sync enemy health to all clients
+                                    float newHealth = playCardButton.enemyHealthAmount[enemyIndex];
+                                    photonView.RPC("RPC_SyncEnemyHealth", RpcTarget.All, enemyIndex, newHealth);
+                                    
+                                    Log("Player attack animation complete - enemy damaged");
+                                }
+                                else
+                                {
+                                    LogError($"Invalid enemy index {enemyIndex} when trying to apply damage! Health array count: {playCardButton.enemyHealthAmount.Count}");
+                                }
+                            }
+                            else
+                            {
+                                Log("Non-master: Player attack animation complete (visual only)");
+                            }
+                            
+                            // CRITICAL: After attack completes, advance turn (master client only)
+                            // No character sliding needed since we're using shared character
+                            if (PhotonNetwork.IsMasterClient)
+                            {
+                                // Advance turn after a brief delay to allow animation to complete visually
+                                StartCoroutine(AdvanceTurnAfterAttackDelay(0.5f));
+                            }
+                        });
+                    }
+                    else
+                    {
+                        LogWarning($"Player character has no CharacterJumpAttack component - cannot perform jump attack");
+                    }
                 }
                 else
                 {
-                    // CRITICAL: Use Transform instead of position (same as singleplayer)
-                    // This ensures the enemy attacks the actual player character position
-                    Log($"Enemy attacking player character: {targetCharacter.name}");
-                    Log($"Enemy position: {currentEnemy.transform.position}, Player position: {targetCharacter.transform.position}, Distance: {Vector3.Distance(currentEnemy.transform.position, targetCharacter.transform.position)}");
-                    
-                    // Trigger enemy attack animation (using Transform like singleplayer)
-                    enemyJumpAttack.PerformJumpAttack(targetCharacter.transform, () => {
-                        // Damage applied when animation hits
-                        DamageSharedHealth(1f);
-                        
-                        // Force UI update immediately after damage
-                        ForceUpdateHealthUI();
-                        delayHealthUIUpdate = false;
-                    });
+                    if (playCardButton.playerCharacter == null)
+                    {
+                        LogError("Cannot trigger player attack - playerCharacter is NULL!");
+                    }
+                    if (currentEnemy == null)
+                    {
+                        LogError("Cannot trigger player attack - currentEnemy is NULL!");
+                    }
                 }
             }
-     }
-     }
-  
-          if (!hasAnimation)
-{
- // No animation - apply damage immediately
-DamageSharedHealth(1f);
-  }
-    
-   Log("Wrong answer - damaging shared health and advancing turn after delay");
-         Log($"===== WRONG ANSWER: Starting turn advancement coroutine =====");
-         
-         // Force card reset for all players before advancing turn
-         photonView.RPC("RPC_ForceCardReset", RpcTarget.All);
-         
-         // Advance turn after delay to allow animation to complete
-         StartCoroutine(AdvanceTurnAfterDelay(1.0f));
-         Log($"===== WRONG ANSWER: AdvanceTurnAfterDelay coroutine started =====");
-    }
-  else
-        {
-    // Non-master clients just play the animation visually
-     if (playCardButton != null && playCardButton.playerCharacter != null && 
-         playCardButton.enemyManager.counter < playCardButton.enemyManager.enemies.Count)
-      {
-    GameObject currentEnemy = playCardButton.enemyManager.enemies[playCardButton.enemyManager.counter];
-     EnemyJumpAttack enemyJumpAttack = currentEnemy.GetComponent<EnemyJumpAttack>();
-         
-     if (enemyJumpAttack != null)
-  {
-            // CRITICAL: Ensure player character is valid before attacking
-            // Use currentCharacterInstance if available, otherwise use playCardButton reference
-            GameObject targetCharacter = currentCharacterInstance != null ? currentCharacterInstance : playCardButton.playerCharacter;
             
-            if (targetCharacter != null)
+            if (!hasAnimation)
             {
-                // Update enemy's original position before attack
-                enemyJumpAttack.UpdateOriginalPosition();
+                // No animation - apply damage immediately on Master Client
+                if (PhotonNetwork.IsMasterClient)
+                {
+                    playCardButton.EnemyTakeDamage(1f);
+                    
+                    // Sync enemy health to all clients
+                    int enemyIndex = playCardButton.enemyManager.counter;
+                    float newHealth = playCardButton.enemyHealthAmount[enemyIndex];
+                    photonView.RPC("RPC_SyncEnemyHealth", RpcTarget.All, enemyIndex, newHealth);
+                    
+                    Log("No animation - enemy damaged immediately");
+                }
+            }
+            
+            // Sync correct answer to all players
+            // Get the answer index from the current counter before it was incremented
+            if (playCardButton != null && playCardButton.outputManager != null)
+            {
+                int outputIndex = playCardButton.outputManager.counter;
+                // The answer index should be passed from PlayCardButton, but we'll use counter as fallback
+                // This will be synced via SyncCardState which is called from PlayCardButton
+                Log($"Correct answer played - will sync answer list for output {outputIndex}");
+            }
+            
+            Log($"===== CORRECT ANSWER: RPC_SyncEnemyHealth will handle turn advancement =====");
+            // NOTE: Turn advancement for correct answers is handled in RPC_SyncEnemyHealth
+            // This ensures the turn advances whether the enemy dies or survives
+        }
+        else
+        {
+            // WRONG ANSWER - Trigger enemy attack animation and damage shared health
+            if (PhotonNetwork.IsMasterClient)
+            {
+                Log("Master Client damaging shared health");
                 
-                // CRITICAL: Use Transform instead of position (same as singleplayer)
-                // This ensures the enemy attacks the actual player character position
-                Log($"Non-master: Enemy attacking player character: {targetCharacter.name}");
+                // Find the player character and enemy to trigger attack animation
+                bool hasAnimation = false;
+                if (playCardButton != null && playCardButton.playerCharacter != null && 
+                    playCardButton.enemyManager.counter < playCardButton.enemyManager.enemies.Count)
+                {
+                    GameObject currentEnemy = playCardButton.enemyManager.enemies[playCardButton.enemyManager.counter];
+                    EnemyJumpAttack enemyJumpAttack = currentEnemy.GetComponent<EnemyJumpAttack>();
+                    
+                    if (enemyJumpAttack != null)
+                    {
+                        hasAnimation = true;
+                        delayHealthUIUpdate = true;
+                        
+                        // CRITICAL: Ensure player character is valid and in the correct position
+                        if (playCardButton.playerCharacter == null)
+                        {
+                            LogError("Cannot trigger enemy attack - playerCharacter is NULL!");
+                            hasAnimation = false;
+                        }
+                        else
+                        {
+                            // Update enemy's original position before attack to ensure correct return position
+                            enemyJumpAttack.UpdateOriginalPosition();
+                            
+                            // CRITICAL: Use playCardButton.playerCharacter directly (shared character for all players)
+                            if (playCardButton.playerCharacter == null)
+                            {
+                                LogError("Cannot trigger enemy attack - playerCharacter is NULL!");
+                                hasAnimation = false;
+                            }
+                            else
+                            {
+                                // CRITICAL: Use Transform instead of position (same as singleplayer)
+                                // This ensures the enemy attacks the actual player character position
+                                Log($"Enemy attacking player character: {playCardButton.playerCharacter.name}");
+                                Log($"Enemy position: {currentEnemy.transform.position}, Player position: {playCardButton.playerCharacter.transform.position}, Distance: {Vector3.Distance(currentEnemy.transform.position, playCardButton.playerCharacter.transform.position)}");
+                                
+                                // Trigger enemy attack animation (using Transform like singleplayer)
+                                enemyJumpAttack.PerformJumpAttack(playCardButton.playerCharacter.transform, () => {
+                                    // Damage applied when animation hits
+                                    DamageSharedHealth(1f);
+                                    
+                                    // Force UI update immediately after damage
+                                    ForceUpdateHealthUI();
+                                    delayHealthUIUpdate = false;
+                                });
+                            }
+                        }
+                    }
+                }
                 
-                enemyJumpAttack.PerformJumpAttack(targetCharacter.transform, () => {
-                    Log("Non-master: Enemy attack animation complete (visual only)");
-                });
+                if (!hasAnimation)
+                {
+                    // No animation - apply damage immediately
+                    DamageSharedHealth(1f);
+                }
+                
+                Log("Wrong answer - damaging shared health and advancing turn after delay");
+                Log($"===== WRONG ANSWER: Starting turn advancement coroutine =====");
+                
+                // Force card reset for all players before advancing turn
+                photonView.RPC("RPC_ForceCardReset", RpcTarget.All);
+                
+                // Advance turn after delay to allow animation to complete
+                StartCoroutine(AdvanceTurnAfterDelay(1.0f));
+                Log($"===== WRONG ANSWER: AdvanceTurnAfterDelay coroutine started =====");
             }
             else
             {
-                LogWarning("Cannot trigger enemy attack on non-master - no valid character reference!");
+                // Non-master clients just play the animation visually
+                if (playCardButton != null && playCardButton.playerCharacter != null && 
+                    playCardButton.enemyManager.counter < playCardButton.enemyManager.enemies.Count)
+                {
+                    GameObject currentEnemy = playCardButton.enemyManager.enemies[playCardButton.enemyManager.counter];
+                    EnemyJumpAttack enemyJumpAttack = currentEnemy.GetComponent<EnemyJumpAttack>();
+                    
+                    if (enemyJumpAttack != null)
+                    {
+                        // CRITICAL: Use playCardButton.playerCharacter directly (shared character for all players)
+                        if (playCardButton.playerCharacter != null)
+                        {
+                            // Update enemy's original position before attack
+                            enemyJumpAttack.UpdateOriginalPosition();
+                            
+                            // CRITICAL: Use Transform instead of position (same as singleplayer)
+                            // This ensures the enemy attacks the actual player character position
+                            Log($"Non-master: Enemy attacking player character: {playCardButton.playerCharacter.name}");
+                            
+                            enemyJumpAttack.PerformJumpAttack(playCardButton.playerCharacter.transform, () => {
+                                Log("Non-master: Enemy attack animation complete (visual only)");
+                            });
+                        }
+                        else
+                        {
+                            LogWarning("Cannot trigger enemy attack on non-master - playerCharacter is NULL!");
+                        }
+                    }
+                }
+                
+                Log("Non-master client, waiting for sync");
             }
-       }
-     }
-    
-        Log("Non-master client, waiting for sync");
-  }
         }
     }
     
-  /// <summary>
+    /// <summary>
     /// Sync enemy health across all clients and update UI
     /// </summary>
     [PunRPC]
-  void RPC_SyncEnemyHealth(int enemyIndex, float newHealth)
+    void RPC_SyncEnemyHealth(int enemyIndex, float newHealth)
     {
         Log($"RPC_SyncEnemyHealth - Enemy {enemyIndex}, Health: {newHealth}");
      
         if (playCardButton == null || enemyIndex >= playCardButton.enemyHealthAmount.Count)
- {
-          LogWarning($"Cannot sync health - invalid enemy index {enemyIndex}");
-   return;
+        {
+            LogWarning($"Cannot sync health - invalid enemy index {enemyIndex}");
+            return;
         }
       
         // Update enemy health amount
-playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
+        playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
         
-      // Update enemy health UI
+        // Update enemy health UI
         playCardButton.UpdateEnemyHealthUI();
         
-  // Master Client checks if enemy is defeated
-    if (PhotonNetwork.IsMasterClient)
-    {
-    if (newHealth <= 0f)
-       {
-       Log($"Enemy {enemyIndex} defeated!");
-          photonView.RPC("RPC_OnEnemyDefeated", RpcTarget.All, enemyIndex);
-          StartCoroutine(AdvanceToNextEnemyOrEnd());
-   }
-        else
+        // Master Client checks if enemy is defeated
+        if (PhotonNetwork.IsMasterClient)
+        {
+            if (newHealth <= 0f)
             {
-            // Enemy still alive but player got correct answer - increment card set
-      Log("Enemy still alive - incrementing card counter and advancing turn");
-            
-            // **CRITICAL: Increment cardManager.counter on EVERY correct answer**
-            // This changes the card set for the next player
-            // BUT: Check bounds to prevent index out of range errors
-            if (cardManager != null)
+                Log($"Enemy {enemyIndex} defeated!");
+                photonView.RPC("RPC_OnEnemyDefeated", RpcTarget.All, enemyIndex);
+                StartCoroutine(AdvanceToNextEnemyOrEnd());
+            }
+            else
             {
-                // Check bounds BEFORE incrementing
-                int maxCounter = Mathf.Min(cardManager.cardContainer.Count, cardManager.cardDisplayContainer.Count) - 1;
-                if (maxCounter < 0)
+                // Enemy still alive but player got correct answer - increment card set
+                Log("Enemy still alive - incrementing card counter and advancing turn");
+                
+                // **CRITICAL: Increment cardManager.counter on EVERY correct answer**
+                // This changes the card set for the next player
+                // BUT: Check bounds to prevent index out of range errors
+                if (cardManager != null)
                 {
-                    LogError($"CardManager has no card containers! Cannot increment counter.");
-                }
-                else
-                {
-                    // Clamp current counter to valid range first
-                    cardManager.counter = Mathf.Clamp(cardManager.counter, 0, maxCounter);
-                    
-                    // Check if we can safely increment
-                    if (cardManager.counter < maxCounter)
+                    // Check bounds BEFORE incrementing
+                    int maxCounter = Mathf.Min(cardManager.cardContainer.Count, cardManager.cardDisplayContainer.Count) - 1;
+                    if (maxCounter < 0)
                     {
-                        cardManager.counter++;
-                        Log($"CardManager counter incremented to {cardManager.counter} after correct answer (Max: {maxCounter})");
+                        LogError($"CardManager has no card containers! Cannot increment counter.");
                     }
                     else
                     {
-                        LogWarning($"Card counter already at max ({maxCounter}) - reusing last available card set");
+                        // Clamp current counter to valid range first
+                        cardManager.counter = Mathf.Clamp(cardManager.counter, 0, maxCounter);
+                        
+                        // Check if we can safely increment
+                        if (cardManager.counter < maxCounter)
+                        {
+                            cardManager.counter++;
+                            Log($"CardManager counter incremented to {cardManager.counter} after correct answer (Max: {maxCounter})");
+                        }
+                        else
+                        {
+                            LogWarning($"Card counter already at max ({maxCounter}) - reusing last available card set");
+                        }
                     }
                 }
+                
+                // Sync ALL counters to all clients
+                Log($"Syncing all counters after correct answer: CardManager={cardManager.counter}, PlayButton={playCardButton.counter}, Output={playCardButton.outputManager.counter}");
+                SyncAllCountersGlobally();
+                
+                // **CRITICAL: Do NOT advance turn here - let the attack animation callback handle it**
+                // The attack animation callback will slide the character off screen, then advance turn
+                // This ensures proper visual flow: Attack -> Slide Out -> Turn Advance -> Next Character Slides In
             }
-            
-            // Sync ALL counters to all clients
-            Log($"Syncing all counters after correct answer: CardManager={cardManager.counter}, PlayButton={playCardButton.counter}, Output={playCardButton.outputManager.counter}");
-            SyncAllCountersGlobally();
-            
-       // **CRITICAL: Do NOT advance turn here - let the attack animation callback handle it**
-       // The attack animation callback will slide the character off screen, then advance turn
-       // This ensures proper visual flow: Attack -> Slide Out -> Turn Advance -> Next Character Slides In
-  }
         }
     }
     
     /// <summary>
     /// Handle enemy defeat across all clients
-  /// </summary>
+    /// </summary>
     [PunRPC]
     void RPC_OnEnemyDefeated(int enemyIndex)
     {
-     Log($"RPC_OnEnemyDefeated - Enemy {enemyIndex}");
+        Log($"RPC_OnEnemyDefeated - Enemy {enemyIndex}");
         
-     if (playCardButton != null)
- {
-     playCardButton.DeactivateEnemy();
-   playCardButton.DeactivateOutput();
-      playCardButton.DeactivateAnswer();
+        if (playCardButton != null)
+        {
+            playCardButton.DeactivateEnemy();
+            playCardButton.DeactivateOutput();
+            playCardButton.DeactivateAnswer();
         }
     }
     
@@ -1840,14 +1765,14 @@ playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
     /// </summary>
     private IEnumerator AdvanceToNextEnemyOrEnd()
     {
-  yield return new WaitForSeconds(1.5f);
+        yield return new WaitForSeconds(1.5f);
      
         if (enemyManager == null || playCardButton == null) yield break;
         
         // Increment counters FOR NEXT QUESTION/ENEMY
-     enemyManager.counter++;
+        enemyManager.counter++;
         playCardButton.outputManager.counter++;
-    playCardButton.counter = 0; // Reset answer index for new question
+        playCardButton.counter = 0; // Reset answer index for new question
         
         // **CRITICAL: Also increment cardManager.counter to match new question**
         // BUT: Check bounds to prevent index out of range errors
@@ -1881,25 +1806,25 @@ playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
         Log($"Syncing all counters after enemy defeat: CardManager={cardManager.counter}, PlayButton={playCardButton.counter}, Output={playCardButton.outputManager.counter}");
         SyncAllCountersGlobally();
     
-     // Check if all enemies defeated
+        // Check if all enemies defeated
         if (enemyManager.counter >= enemyManager.enemies.Count)
- {
+        {
             Log("All enemies defeated - Game Over (Victory)");
             photonView.RPC("RPC_GameOver", RpcTarget.All, true);
         }
         else
-     {
-    // Activate next enemy
-     Log($"Activating next enemy: {enemyManager.counter}");
-     photonView.RPC("RPC_ActivateNextEnemy", RpcTarget.All);
+        {
+            // Activate next enemy
+            Log($"Activating next enemy: {enemyManager.counter}");
+            photonView.RPC("RPC_ActivateNextEnemy", RpcTarget.All);
             
-       // Advance turn (timer will start automatically via OnTurnChanged)
+            // Advance turn (timer will start automatically via OnTurnChanged)
             yield return new WaitForSeconds(0.5f);
             
-         if (turnSystem != null)
-       {
-      Log("Advancing to next player's turn for new enemy");
-      turnSystem.EndTurn();
+            if (turnSystem != null)
+            {
+                Log("Advancing to next player's turn for new enemy");
+                turnSystem.EndTurn();
             }
         }
     }
@@ -1921,31 +1846,31 @@ playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
     /// Activate next enemy on all clients
     /// </summary>
     [PunRPC]
-  void RPC_ActivateNextEnemy()
+    void RPC_ActivateNextEnemy()
     {
         Log($"RPC_ActivateNextEnemy - Activating enemy {enemyManager.counter}");
      
         if (playCardButton != null)
         {
-    playCardButton.ActivateEnemy();
-     playCardButton.ActivateOutput();
-        playCardButton.ActivateAnswer();
-      }
+            playCardButton.ActivateEnemy();
+            playCardButton.ActivateOutput();
+            playCardButton.ActivateAnswer();
+        }
     }
     
     private void SyncCorrectAnswerUI(int playerActorNumber, int answerIndex)
     {
         if (playCardButton != null && playCardButton.outputManager != null)
         {
-    int currentOutput = playCardButton.outputManager.counter;
+            int currentOutput = playCardButton.outputManager.counter;
           
-         if (currentOutput < playCardButton.outputManager.answerListContainer.Count &&
-          answerIndex < playCardButton.outputManager.answerListContainer[currentOutput].answers.Count)
+            if (currentOutput < playCardButton.outputManager.answerListContainer.Count &&
+                answerIndex < playCardButton.outputManager.answerListContainer[currentOutput].answers.Count)
             {
                 var answerObject = playCardButton.outputManager.answerListContainer[currentOutput].answers[answerIndex];
-          answerObject.SetActive(true);
-       Log($"Synced correct answer UI for output {currentOutput}, answer {answerIndex}");
-        }
+                answerObject.SetActive(true);
+                Log($"Synced correct answer UI for output {currentOutput}, answer {answerIndex}");
+            }
         }
     }
     
@@ -2003,37 +1928,37 @@ playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
         }
     }
     
-  public void SyncCardState(int cardCounter, int playButtonCounter, int outputCounter, int answerIndex)
+    public void SyncCardState(int cardCounter, int playButtonCounter, int outputCounter, int answerIndex)
     {
         photonView.RPC("RPC_SyncCardState", RpcTarget.All, cardCounter, playButtonCounter, outputCounter, answerIndex);
-}
+    }
     
     [PunRPC]
     void RPC_SyncCardState(int cardCounter, int playButtonCounter, int outputCounter, int answerIndex)
     {
-      Log($"===== RPC_SyncCardState =====");
-      Log($"Received - CardManager: {cardCounter}, PlayButton: {playButtonCounter}, Output: {outputCounter}, Answer: {answerIndex}");
-      Log($"Before sync - CardManager.counter: {(cardManager != null ? cardManager.counter.ToString() : "null")}, PlayButton.counter: {(playCardButton != null ? playCardButton.counter.ToString() : "null")}");
+        Log($"===== RPC_SyncCardState =====");
+        Log($"Received - CardManager: {cardCounter}, PlayButton: {playButtonCounter}, Output: {outputCounter}, Answer: {answerIndex}");
+        Log($"Before sync - CardManager.counter: {(cardManager != null ? cardManager.counter.ToString() : "null")}, PlayButton.counter: {(playCardButton != null ? playCardButton.counter.ToString() : "null")}");
      
-   if (cardManager != null) 
-   {
-       cardManager.counter = cardCounter;
-       Log($"✓ CardManager.counter synced to: {cardCounter} (which question's card set to use)");
-   }
+        if (cardManager != null) 
+        {
+            cardManager.counter = cardCounter;
+            Log($"✓ CardManager.counter synced to: {cardCounter} (which question's card set to use)");
+        }
    
-   if (playCardButton != null) 
-   {
-       playCardButton.counter = playButtonCounter;
-       Log($"✓ PlayButton.counter synced to: {playButtonCounter} (next answer index within question)");
-   }
+        if (playCardButton != null) 
+        {
+            playCardButton.counter = playButtonCounter;
+            Log($"✓ PlayButton.counter synced to: {playButtonCounter} (next answer index within question)");
+        }
    
-   if (playCardButton != null && playCardButton.outputManager != null) 
-   {
-       playCardButton.outputManager.counter = outputCounter;
-       Log($"✓ OutputManager.counter synced to: {outputCounter} (which question/enemy)");
-   }
+        if (playCardButton != null && playCardButton.outputManager != null) 
+        {
+            playCardButton.outputManager.counter = outputCounter;
+            Log($"✓ OutputManager.counter synced to: {outputCounter} (which question/enemy)");
+        }
    
-    // Activate the correct answer in the UI
+        // Activate the correct answer in the UI
         if (answerIndex >= 0 && playCardButton != null && playCardButton.outputManager != null)
         {
             Log($"Attempting to activate answer - Output: {outputCounter}, Answer: {answerIndex}");
@@ -2072,9 +1997,9 @@ playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
     public void OnEnemyDefeated()
     {
         if (PhotonNetwork.IsMasterClient)
-  {
+        {
             StartCoroutine(NextTurnAfterDelay(1.5f));
-     }
+        }
     }
     
     public void AdvanceTurn()
@@ -2082,7 +2007,7 @@ playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
         if (PhotonNetwork.IsMasterClient && turnSystem != null)
         {
             Log("Advancing turn manually");
-         turnSystem.EndTurn();
+            turnSystem.EndTurn();
         }
     }
     
@@ -2091,16 +2016,16 @@ playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
         yield return new WaitForSeconds(delay);
         
         if (AreAllEnemiesDead())
-  {
-   photonView.RPC("RPC_GameOver", RpcTarget.All, true);
+        {
+            photonView.RPC("RPC_GameOver", RpcTarget.All, true);
         }
         else
         {
- if (turnSystem != null)
-         {
-    Log("Moving to next turn after delay");
-             turnSystem.EndTurn();
-        }
+            if (turnSystem != null)
+            {
+                Log("Moving to next turn after delay");
+                turnSystem.EndTurn();
+            }
         }
     }
     
@@ -2210,7 +2135,7 @@ playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
     
     private IEnumerator AdvanceTurnAfterDelay(float delay)
     {
-   Log($"===== ADVANCE TURN AFTER DELAY: {delay}s =====");
+        Log($"===== ADVANCE TURN AFTER DELAY: {delay}s =====");
         Log($"Master Client: {PhotonNetwork.IsMasterClient}");
         Log($"Current turn player: {turnSystem?.GetCurrentTurnPlayer()?.NickName}");
   
@@ -2218,15 +2143,29 @@ playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
      
         Log($"Delay complete - advancing turn now");
       
-   if (turnSystem != null)
+        if (turnSystem != null)
         {
-      Log("Calling turnSystem.EndTurn()");
-        turnSystem.EndTurn();
+            Log("Calling turnSystem.EndTurn()");
+            turnSystem.EndTurn();
             Log("turnSystem.EndTurn() completed");
-   }
+        }
         else
         {
-LogError("CRITICAL: turnSystem is NULL! Cannot advance turn!");
+            LogError("CRITICAL: turnSystem is NULL! Cannot advance turn!");
+        }
+    }
+    
+    /// <summary>
+    /// Advance turn after player attack animation completes
+    /// </summary>
+    private IEnumerator AdvanceTurnAfterAttackDelay(float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        
+        if (PhotonNetwork.IsMasterClient && turnSystem != null)
+        {
+            Log("Advancing turn after player attack");
+            turnSystem.EndTurn();
         }
     }
   
@@ -2235,24 +2174,24 @@ LogError("CRITICAL: turnSystem is NULL! Cannot advance turn!");
     /// </summary>
     public void OnTurnTimedOut()
     {
-   if (!PhotonNetwork.IsMasterClient)
+        if (!PhotonNetwork.IsMasterClient)
         {
-   LogWarning("OnTurnTimedOut called on non-Master Client - ignoring");
-return;
-  }
+            LogWarning("OnTurnTimedOut called on non-Master Client - ignoring");
+            return;
+        }
         
-  Log("===== TURN TIMED OUT =====");
+        Log("===== TURN TIMED OUT =====");
       
         // Damage shared health (timeout is like a wrong answer)
         DamageSharedHealth(1f);
-  Log("Shared health damaged due to timeout");
+        Log("Shared health damaged due to timeout");
     
         // Force card reset for all players
         photonView.RPC("RPC_ForceCardReset", RpcTarget.All);
         Log("Cards reset due to timeout");
         
-  // Advance turn after delay
-     StartCoroutine(AdvanceTurnAfterDelay(1.0f));
+        // Advance turn after delay
+        StartCoroutine(AdvanceTurnAfterDelay(1.0f));
     }
     
     #endregion
@@ -2263,15 +2202,15 @@ return;
     {
         if (enemyManager == null) return false;
         
- foreach (var enemy in enemyManager.enemies)
-    {
-         if (enemy != null && enemy.activeSelf)
+        foreach (var enemy in enemyManager.enemies)
+        {
+            if (enemy != null && enemy.activeSelf)
             {
-  return false;
-         }
+                return false;
+            }
         }
    
-      return true;
+        return true;
     }
     
     #endregion
@@ -2281,20 +2220,20 @@ return;
     [PunRPC]
     void RPC_GameOver(bool victory)
     {
-    isGameOver = true;
-     DisablePlayerControls();
+        isGameOver = true;
+        DisablePlayerControls();
         HideMultiplayerUI();
         
-    if (victory)
+        if (victory)
         {
             if (victoryPanel != null) victoryPanel.SetActive(true);
             if (gameOverText != null) gameOverText.text = "VICTORY!\nAll enemies defeated!";
-   }
+        }
         else
         {
             if (gameOverPanel != null) gameOverPanel.SetActive(true);
-if (gameOverText != null) gameOverText.text = "GAME OVER\nShared health depleted!";
- }
+            if (gameOverText != null) gameOverText.text = "GAME OVER\nShared health depleted!";
+        }
     }
     
     public void RestartLevel()
@@ -2302,21 +2241,21 @@ if (gameOverText != null) gameOverText.text = "GAME OVER\nShared health depleted
         if (PhotonNetwork.IsMasterClient)
         {
             PhotonNetwork.LoadLevel(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
-    }
+        }
     }
     
     public void ReturnToLobby()
     {
         PhotonNetwork.LoadLevel("MultiplayerLobby");
-  }
+    }
     
     #endregion
     
     #region Player List UI
     
     private void UpdatePlayerListUI()
- {
-   if (playerListContainer == null)
+    {
+        if (playerListContainer == null)
         {
             LogWarning("Player list container is NULL!");
             return;
@@ -2328,36 +2267,36 @@ if (gameOverText != null) gameOverText.text = "GAME OVER\nShared health depleted
             return;
         }
         
-   // Clear existing items
+        // Clear existing items
         foreach (Transform child in playerListContainer)
         {
-       Destroy(child.gameObject);
+            Destroy(child.gameObject);
         }
         
         Log($"Creating player list for {PhotonNetwork.PlayerList.Length} players");
         
         foreach (Player player in PhotonNetwork.PlayerList)
-      {
-        GameObject listItem = Instantiate(playerListItemPrefab, playerListContainer);
+        {
+            GameObject listItem = Instantiate(playerListItemPrefab, playerListContainer);
             listItem.SetActive(true);
             
             TextMeshProUGUI nameText = listItem.GetComponentInChildren<TextMeshProUGUI>();
-         if (nameText != null)
-    {
-              nameText.text = player.NickName;
-            
-   if (player.IsLocal)
-  {
-         nameText.text += " (You)";
-     nameText.color = Color.green;
+            if (nameText != null)
+            {
+                nameText.text = player.NickName;
+                
+                if (player.IsLocal)
+                {
+                    nameText.text += " (You)";
+                    nameText.color = Color.green;
+                }
+                
+                Log($"Added player: {nameText.text}");
             }
-   
-            Log($"Added player: {nameText.text}");
-       }
-         else
-    {
-       LogWarning("No TextMeshProUGUI found in player list item prefab!");
-      }
+            else
+            {
+                LogWarning("No TextMeshProUGUI found in player list item prefab!");
+            }
         }
         
         playerListContainer.gameObject.SetActive(true);
@@ -2369,36 +2308,36 @@ if (gameOverText != null) gameOverText.text = "GAME OVER\nShared health depleted
     
     public override void OnRoomPropertiesUpdate(ExitGames.Client.Photon.Hashtable propertiesThatChanged)
     {
-     if (propertiesThatChanged.ContainsKey("SharedHealth"))
+        if (propertiesThatChanged.ContainsKey("SharedHealth"))
         {
-     UpdateHealthUI();
-      }
+            UpdateHealthUI();
+        }
     }
  
     public override void OnPlayerLeftRoom(Player otherPlayer)
     {
-   if (playerCharacters.ContainsKey(otherPlayer.ActorNumber))
-    {
-        Destroy(playerCharacters[otherPlayer.ActorNumber]);
-     playerCharacters.Remove(otherPlayer.ActorNumber);
+        if (playerCharacters.ContainsKey(otherPlayer.ActorNumber))
+        {
+            Destroy(playerCharacters[otherPlayer.ActorNumber]);
+            playerCharacters.Remove(otherPlayer.ActorNumber);
         }
   
         UpdatePlayerListUI();
         
-   // NEW: If a player leaves during an active game, return all players to lobby
- if (!isGameOver && PhotonNetwork.InRoom)
+        // NEW: If a player leaves during an active game, return all players to lobby
+        if (!isGameOver && PhotonNetwork.InRoom)
         {
-    Log($"Player {otherPlayer.NickName} left during game - returning all players to lobby");
+            Log($"Player {otherPlayer.NickName} left during game - returning all players to lobby");
      
-        // Show message to remaining players
+            // Show message to remaining players
             if (gameOverText != null)
             {
- gameOverText.text = $"Player {otherPlayer.NickName} left the game!\nReturning to lobby...";
-}
+                gameOverText.text = $"Player {otherPlayer.NickName} left the game!\nReturning to lobby...";
+            }
         
             // Delay slightly to show message, then return to lobby
-          StartCoroutine(ReturnToLobbyAfterDelay(2f));
-   }
+            StartCoroutine(ReturnToLobbyAfterDelay(2f));
+        }
     }
   
     public override void OnPlayerEnteredRoom(Player newPlayer)
