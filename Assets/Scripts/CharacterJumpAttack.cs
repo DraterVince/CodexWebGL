@@ -24,6 +24,10 @@ public Vector3 characterScale = Vector3.one;
     public GameObject attackEffectPrefab;
     public Vector3 attackEffectOffset = Vector3.zero;
     
+    // CRITICAL: In multiplayer, we don't want to return to original position after attack
+    // The character should slide off screen instead
+    public bool returnToStartPositionAfterAttack = true;
+    
     private Vector3 originalPosition;
     private bool isAnimating = false;
     private bool hasShownIdleWarning = false;
@@ -235,9 +239,31 @@ try
         
      yield return new WaitForSeconds(attackPauseDuration);
         
-        yield return StartCoroutine(JumpToPosition(transform.position, startPosition, jumpBackDuration));
+        // CRITICAL: In multiplayer, don't return to start position - let the character slide off screen instead
+        // Check if we're in multiplayer mode
+        bool isMultiplayer = false;
+        try
+        {
+            isMultiplayer = Photon.Pun.PhotonNetwork.IsConnected && Photon.Pun.PhotonNetwork.InRoom;
+        }
+        catch
+        {
+            // Photon not available - assume singleplayer
+            isMultiplayer = false;
+        }
         
-        PlayIdleAnimation();
+        // Only return to start position if explicitly enabled AND not in multiplayer
+        if (returnToStartPositionAfterAttack && !isMultiplayer)
+        {
+            yield return StartCoroutine(JumpToPosition(transform.position, startPosition, jumpBackDuration));
+            PlayIdleAnimation();
+        }
+        else
+        {
+            // Multiplayer mode - stay at attack position (will slide off screen via SharedMultiplayerGameManager)
+            Debug.Log($"[CharacterJumpAttack] {gameObject.name}: Multiplayer mode - staying at attack position (will slide off screen)");
+            // Don't play idle animation - character will be deactivated when sliding off screen
+        }
         
         isAnimating = false;
     }

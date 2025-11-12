@@ -1313,8 +1313,36 @@ Log($"RPC_SyncCardCounter - Setting counter to {newCounter}");
                    
                    Log($"Triggering player jump attack on {characterToUse.name} targeting enemy {currentEnemy.name}");
                    
+                   // CRITICAL: Store the character instance and actor number for slide-out animation
+                   // We need to capture these BEFORE the coroutine starts, as the character might change
+                   GameObject attackingCharacter = characterToUse;
+                   
+                   // Get the actor number of the player who owns this character
+                   // Find which player this character belongs to
+                   int attackingActorNumber = -1;
+                   foreach (var kvp in playerCharacters)
+                   {
+                       if (kvp.Value == characterToUse)
+                       {
+                           attackingActorNumber = kvp.Key;
+                           break;
+                       }
+                   }
+                   
+                   if (attackingActorNumber < 0)
+                   {
+                       // Fallback: use the player who played the card (from RPC parameter)
+                       attackingActorNumber = playerActorNumber;
+                   }
+                   
+                   Log($"Stored attacking character: {attackingCharacter.name} for actor {attackingActorNumber}");
+                   Log($"Character position: {attackingCharacter.transform.position}, Enemy position: {currentEnemy.transform.position}");
+                   
                    // Trigger player jump attack animation on ALL clients
+                   // The character GameObject itself will move to the enemy position
                    jumpAttack.PerformJumpAttack(currentEnemy.transform, () => {
+                       Log($"Attack animation callback invoked for character {attackingCharacter?.name}");
+                       
                        // Master Client applies damage
                        if (PhotonNetwork.IsMasterClient)
                        {
@@ -1338,6 +1366,29 @@ Log($"RPC_SyncCardCounter - Setting counter to {newCounter}");
                        else
                        {
                            Log("Non-master: Player attack animation complete (visual only)");
+                       }
+                       
+                       // CRITICAL: After attack completes, slide character off screen on ALL clients
+                       // Then advance turn (master client only)
+                       // The character should now be at the enemy position after the jump attack
+                       if (attackingCharacter != null)
+                       {
+                           Log($"Starting slide-off animation for character {attackingCharacter.name} (actor {attackingActorNumber})");
+                           Log($"Character position before slide: {attackingCharacter.transform.position}");
+                           Log($"Character is current character: {attackingCharacter == currentCharacterInstance}");
+                           
+                           // Start slide-off animation on ALL clients
+                           // This ensures visual consistency across all clients
+                           StartCoroutine(SlideCharacterOffScreenThenAdvanceTurn(attackingCharacter, attackingActorNumber));
+                       }
+                       else
+                       {
+                           LogError("Attacking character is null in attack callback! Cannot slide off screen.");
+                           // Still advance turn if master client
+                           if (PhotonNetwork.IsMasterClient)
+                           {
+                               StartCoroutine(AdvanceTurnAfterDelay(0.5f));
+                           }
                        }
                    });
                }
@@ -1567,13 +1618,9 @@ playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
             Log($"Syncing all counters after correct answer: CardManager={cardManager.counter}, PlayButton={playCardButton.counter}, Output={playCardButton.outputManager.counter}");
             SyncAllCountersGlobally();
             
-       // **CRITICAL: Force card reset BEFORE advancing turn**
-       // This ensures cards are reset for the next player's turn
- photonView.RPC("RPC_ForceCardReset", RpcTarget.All);
-         
-         // Advance turn after a short delay to allow animations/UI updates
-         // This ensures the turn always advances after a correct answer, even if enemy survives
-         StartCoroutine(AdvanceTurnAfterDelay(1.0f));
+       // **CRITICAL: Do NOT advance turn here - let the attack animation callback handle it**
+       // The attack animation callback will slide the character off screen, then advance turn
+       // This ensures proper visual flow: Attack -> Slide Out -> Turn Advance -> Next Character Slides In
   }
         }
     }
@@ -1861,6 +1908,110 @@ playCardButton.enemyHealthAmount[enemyIndex] = newHealth;
              turnSystem.EndTurn();
         }
         }
+    }
+    
+    /// <summary>
+    /// Slide character off screen after attack, then advance turn
+    /// This is called from the attack animation callback on ALL clients
+    /// </summary>
+    private IEnumerator SlideCharacterOffScreenThenAdvanceTurn(GameObject character, int actorNumber)
+    {
+        Log($"===== SlideCharacterOffScreenThenAdvanceTurn STARTED for actor {actorNumber} =====");
+        Log($"Character: {character?.name}, Active: {character?.activeSelf}, Position: {character?.transform.position}");
+        
+        // Wait for attack animation to fully complete (character should be at enemy position now)
+        // CharacterJumpAttack should have already moved the character to the enemy and back
+        // But in multiplayer, it stays at attack position - so we slide from there
+        yield return new WaitForSeconds(0.5f);
+        
+        // CRITICAL: Ensure we're using the correct character reference
+        // The character might have been changed by turn switching, so check if it's still the current character
+        if (character == null)
+        {
+            LogError($"Character is null! Cannot slide off screen.");
+            // Still advance turn if master client
+            if (PhotonNetwork.IsMasterClient)
+            {
+                StartCoroutine(AdvanceTurnAfterDelay(0.1f));
+            }
+            yield break;
+        }
+        
+        // Ensure character is active before sliding
+        if (!character.activeSelf)
+        {
+            character.SetActive(true);
+            Log($"Character {character.name} was inactive - activated for slide animation");
+        }
+        
+        // Get current position (should be at or near enemy position after attack)
+        Vector3 startPos = character.transform.position;
+        Vector3 targetPos = offScreenLeft;
+        
+        // Log for debugging
+        Log($"Sliding character {character.name} off screen from {startPos} to {targetPos}");
+        Log($"Character active: {character.activeSelf}, Is current character: {character == currentCharacterInstance}");
+        
+        float duration = 0.5f; // 0.5 seconds for slide animation
+        float elapsed = 0f;
+        
+        // Slide character off screen to the left
+        while (elapsed < duration && character != null)
+        {
+            // Check if character is still valid
+            if (character == null || !character.activeSelf)
+            {
+                LogWarning($"Character {character?.name} became null or inactive during slide - stopping animation");
+                break;
+            }
+            
+            elapsed += Time.deltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            // Use smooth step for better easing
+            float smoothT = t * t * (3f - 2f * t);
+            character.transform.position = Vector3.Lerp(startPos, targetPos, smoothT);
+            yield return null;
+        }
+        
+        // Finalize position and deactivate
+        if (character != null)
+        {
+            character.transform.position = targetPos;
+            character.SetActive(false);
+            Log($"Character {character.name} slid off screen to {targetPos} and deactivated");
+            
+            // Clear current character instance if this was the current character
+            if (character == currentCharacterInstance)
+            {
+                Log($"Clearing currentCharacterInstance (was {character.name})");
+                currentCharacterInstance = null;
+            }
+        }
+        
+        // Wait a brief moment before advancing turn
+        yield return new WaitForSeconds(0.2f);
+        
+        // Now advance turn - this will trigger character switching for the next player
+        Log($"Advancing turn after character slide-out");
+        if (PhotonNetwork.IsMasterClient)
+        {
+            if (turnSystem != null)
+            {
+                Log("Calling turnSystem.EndTurn()");
+                turnSystem.EndTurn();
+                Log("turnSystem.EndTurn() completed");
+            }
+            else
+            {
+                LogError("CRITICAL: turnSystem is NULL! Cannot advance turn!");
+            }
+        }
+        else
+        {
+            Log("Non-master client - waiting for master to advance turn");
+        }
+        
+        Log($"===== SlideCharacterOffScreenThenAdvanceTurn COMPLETED for actor {actorNumber} =====");
     }
     
     private IEnumerator AdvanceTurnAfterDelay(float delay)

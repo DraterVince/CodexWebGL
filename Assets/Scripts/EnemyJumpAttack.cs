@@ -246,30 +246,61 @@ if (useSpriteAnimation && characterAnimator != null)
         
         directionToTarget = directionToTarget.normalized;
         
-        // Calculate attack position - enemy should jump TOWARDS player but stop at attackDistance
-        // attackPosition should be a point on the line from startPosition to targetPosition
-        // that is attackDistance away from targetPosition
+        // Calculate attack position - enemy should jump TOWARDS player
+        // The attack position should be between enemy and player, closer to the player
+        // But stop at attackDistance from the player to avoid overlapping
         Vector3 attackPosition;
         
+        // Calculate how far the enemy should jump towards the player
+        // The enemy should jump most of the way to the player, but stop at attackDistance
         if (distanceToTarget > attackDistance)
         {
-            // Enemy is far - jump to a point that's attackDistance away from player
-            // This ensures the enemy stops at the correct distance from the player
-            attackPosition = targetPosition - (directionToTarget * attackDistance);
+            // Enemy is far from player - calculate jump distance
+            // Jump distance = total distance minus attack distance (but ensure we move forward)
+            float jumpDistance = distanceToTarget - attackDistance;
+            
+            // Ensure jump distance is positive (safety check)
+            if (jumpDistance > 0)
+            {
+                // Jump forward towards player
+                attackPosition = startPosition + (directionToTarget * jumpDistance);
+            }
+            else
+            {
+                // If calculation fails, just jump 80% of the way to player
+                attackPosition = startPosition + (directionToTarget * (distanceToTarget * 0.8f));
+                Debug.LogWarning($"[EnemyJumpAttack] {gameObject.name}: Invalid jump distance calculated ({jumpDistance}), using 80% of distance");
+            }
         }
         else
         {
-            // Enemy is close - jump 80% of the way to player (don't overshoot)
+            // Enemy is already close - jump 80% of the way to player (don't overshoot)
             attackPosition = startPosition + (directionToTarget * (distanceToTarget * 0.8f));
         }
         
-        // Ensure attack position doesn't go past the player (safety check)
+        // Final safety check: ensure attack position is between start and target
         float distanceFromStartToAttack = Vector3.Distance(startPosition, attackPosition);
-        if (distanceFromStartToAttack > distanceToTarget)
+        float distanceFromAttackToTarget = Vector3.Distance(attackPosition, targetPosition);
+        
+        // Verify the attack position makes sense
+        // The sum of distances should approximately equal the total distance (within tolerance)
+        float totalCalculatedDistance = distanceFromStartToAttack + distanceFromAttackToTarget;
+        float distanceTolerance = distanceToTarget * 0.1f; // 10% tolerance
+        
+        if (Mathf.Abs(totalCalculatedDistance - distanceToTarget) > distanceTolerance)
         {
-            // Clamp attack position to not exceed target (shouldn't happen, but safety check)
-            attackPosition = startPosition + (directionToTarget * (distanceToTarget * 0.9f));
-            Debug.LogWarning($"[EnemyJumpAttack] {gameObject.name}: Attack position was past player! Clamped to {attackPosition}");
+            // Invalid position - recalculate safely
+            Debug.LogWarning($"[EnemyJumpAttack] {gameObject.name}: Invalid attack position! Recalculating... Distance from start to attack: {distanceFromStartToAttack}, From attack to target: {distanceFromAttackToTarget}, Total distance: {distanceToTarget}");
+            // Just jump 80% of the way to player
+            attackPosition = startPosition + (directionToTarget * (distanceToTarget * 0.8f));
+        }
+        
+        // Additional check: ensure we're moving forward (attack position should be closer to target than start)
+        if (Vector3.Distance(attackPosition, targetPosition) > distanceToTarget * 1.1f)
+        {
+            // Attack position is further from target than we started - this is wrong!
+            Debug.LogError($"[EnemyJumpAttack] {gameObject.name}: Attack position is BEHIND starting position! This will cause backwards movement. Recalculating...");
+            attackPosition = startPosition + (directionToTarget * (distanceToTarget * 0.8f));
         }
         
         Debug.Log($"[EnemyJumpAttack] {gameObject.name}: Enemy at {startPosition}, Player at {targetPosition}, Distance: {distanceToTarget:F2}");
