@@ -1083,6 +1083,7 @@ playerPendingKick = null;
   
     /// <summary>
     /// Update the kick button array (static buttons)
+    /// Only shows kick buttons to the host
     /// </summary>
     private void UpdateKickButtons()
     {
@@ -1100,18 +1101,23 @@ playerPendingKick = null;
      {
                 Player player = sortedPlayers[i];
       
-            // Show button
-       playerKickButtons[i].gameObject.SetActive(true);
+            // Only show kick button if host can kick this player
+        bool canKick = isHost && !player.IsLocal && !player.IsMasterClient;
+            
+            // Hide button completely for non-hosts, or if this player can't be kicked
+            playerKickButtons[i].gameObject.SetActive(canKick);
       
-  // Update name text
-         if (playerNameTexts != null && i < playerNameTexts.Length && playerNameTexts[i] != null)
+  // Update name text (only if button is visible)
+         if (canKick && playerNameTexts != null && i < playerNameTexts.Length && playerNameTexts[i] != null)
     {
           playerNameTexts[i].text = player.NickName;
                 }
             
-             // Enable/disable button
-        bool canKick = isHost && !player.IsLocal && !player.IsMasterClient;
-      playerKickButtons[i].interactable = canKick;
+             // Enable button (should always be true if visible, but set it anyway)
+      if (canKick)
+            {
+                playerKickButtons[i].interactable = true;
+            }
  }
             else
           {
