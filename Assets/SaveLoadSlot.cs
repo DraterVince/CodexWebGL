@@ -9,6 +9,8 @@ public class SaveLoadSlot : MonoBehaviour
     public TextMeshProUGUI slotNumberText;
     public TextMeshProUGUI levelText;
     public TextMeshProUGUI moneyText;
+    public TextMeshProUGUI progressLabelText; // Label text (e.g., "Completion Rate:")
+    public TextMeshProUGUI progressText; // Progress percentage text (e.g., "45%")
     public Button loadButton;
     public Button deleteButton;
     public GameObject emptySlotIndicator;
@@ -77,6 +79,18 @@ public class SaveLoadSlot : MonoBehaviour
             if (moneyText != null)
             {
                 moneyText.text = "Money: " + data.currentMoney;
+            }
+
+            // Display progress label and percentage
+            if (progressLabelText != null)
+            {
+                progressLabelText.text = "Completion Rate:";
+            }
+
+            if (progressText != null && NewAndLoadGameManager.Instance != null)
+            {
+                float progress = NewAndLoadGameManager.Instance.GetSlotProgressPercentage(slot);
+                progressText.text = $"{progress:F0}%";
             }
 
             if (loadButton != null)

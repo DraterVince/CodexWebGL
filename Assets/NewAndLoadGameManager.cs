@@ -9,9 +9,13 @@ public class NewAndLoadGameManager : MonoBehaviour
 {
     public static NewAndLoadGameManager Instance;
     
-    private const int SlotCount = 6;
+    private const int SlotCount = 3;
     private const string SaveKeyPrefix = "SaveSlot_";
     private const string CurrentSlotKey = "CurrentSlot";
+    
+    // Level progress tracking
+    private const int FirstLevelIndex = 5; // Tutorial level (index 5)
+    private const int LastLevelIndex = 15; // Part1Level10 (index 15)
     
     public int CurrentSlot { get; private set; }
     private string currentUserId = "";
@@ -265,7 +269,15 @@ public class NewAndLoadGameManager : MonoBehaviour
         Debug.Log("[NewAndLoadGameManager] WebGL: Waiting for PlayerPrefs to save before loading scene...");
       StartCoroutine(LoadGameSceneAfterDelay());
 #else
-LoadGameScene();
+        // Show loading screen if available
+        if (LoadingScreenManager.Instance != null)
+        {
+            StartCoroutine(LoadGameSceneWithLoading());
+        }
+        else
+        {
+            LoadGameScene();
+        }
 #endif
       }
     }
@@ -298,7 +310,16 @@ Debug.Log("[NewAndLoadGameManager] Save completed, proceeding with scene load");
     yield return new WaitForSeconds(0.5f);
    
         Debug.Log("[NewAndLoadGameManager] Loading LevelSelect scene now");
-    LoadGameScene();
+        
+        // Show loading screen if available
+        if (LoadingScreenManager.Instance != null)
+        {
+            StartCoroutine(LoadGameSceneWithLoading());
+        }
+        else
+        {
+            LoadGameScene();
+        }
     }
 #endif
 
@@ -326,7 +347,63 @@ return JsonUtility.FromJson<GameData>(json);
 
     private void LoadGameScene()
     {
-  SceneManager.LoadScene("LevelSelect");
+        // Show loading screen if available
+        if (LoadingScreenManager.Instance != null)
+        {
+            StartCoroutine(LoadGameSceneWithLoading());
+        }
+        else
+        {
+            SceneManager.LoadScene("LevelSelect");
+        }
+    }
+    
+    private IEnumerator LoadGameSceneWithLoading()
+    {
+        // Check if LoadingScreenManager still exists
+        if (LoadingScreenManager.Instance == null)
+        {
+            SceneManager.LoadScene("LevelSelect");
+            yield break;
+        }
+        
+        // Show loading screen
+        LoadingScreenManager.Instance.ShowLoadingScreen("Loading...");
+        
+        // Wait for minimum loading duration
+        float minDuration = LoadingScreenManager.Instance != null ? LoadingScreenManager.Instance.minLoadingDuration : 1.5f;
+        yield return new WaitForSeconds(minDuration);
+        
+        // Load scene asynchronously
+        AsyncOperation asyncLoad = SceneManager.LoadSceneAsync("LevelSelect");
+        asyncLoad.allowSceneActivation = false;
+        
+        // Wait until scene is loaded
+        while (asyncLoad.progress < 0.9f)
+        {
+            yield return null;
+        }
+        
+        // Wait a bit more for smooth transition
+        yield return new WaitForSeconds(0.2f);
+        
+        // Activate scene
+        asyncLoad.allowSceneActivation = true;
+        
+        // Wait for scene to fully activate
+        while (!asyncLoad.isDone)
+        {
+            yield return null;
+        }
+        
+        // Wait a moment for scene to initialize
+        yield return new WaitForSeconds(0.1f);
+        
+        // Hide loading screen after scene is loaded (fade out from black)
+        if (LoadingScreenManager.Instance != null)
+        {
+            LoadingScreenManager.Instance.HideLoadingScreen();
+        }
     }
 
     public void AutoSave()
@@ -564,6 +641,56 @@ SaveToSlot(CurrentSlot, data);
 
         GameData data = LoadFromSlot(slot);
         return data == null || data.isEmpty;
+    }
+    
+    /// <summary>
+    /// Calculate progress percentage based on levels unlocked
+    /// Returns a value from 0 to 100 representing completion percentage
+    /// Progress is calculated from first level (index 5) to last level (index 15)
+    /// Note: Having the first level unlocked still counts as 0% (no levels completed yet)
+    /// </summary>
+    public float CalculateProgressPercentage(int levelsUnlocked)
+    {
+        // Total number of levels (from index 5 to 15, inclusive)
+        int totalLevels = LastLevelIndex - FirstLevelIndex + 1;
+        
+        // Calculate how many levels have been completed
+        // levelsUnlocked represents the highest unlocked level index
+        // If levelsUnlocked = 5, first level is unlocked but not completed → 0%
+        // If levelsUnlocked = 6, level 1 is unlocked, meaning first level is completed → 1 completed
+        // If levelsUnlocked = 7, level 2 is unlocked, meaning 2 levels completed
+        // So completed levels = levelsUnlocked - FirstLevelIndex - 1
+        // We subtract 1 because unlocking a level means you completed the previous one
+        
+        int completedLevels = Mathf.Max(0, levelsUnlocked - FirstLevelIndex - 1);
+        
+        // Clamp to valid range (0 to totalLevels)
+        completedLevels = Mathf.Clamp(completedLevels, 0, totalLevels);
+        
+        // Calculate percentage
+        float percentage = (float)completedLevels / totalLevels * 100f;
+        
+        // Clamp between 0 and 100
+        return Mathf.Clamp(percentage, 0f, 100f);
+    }
+    
+    /// <summary>
+    /// Get progress percentage for a specific slot
+    /// </summary>
+    public float GetSlotProgressPercentage(int slot)
+    {
+        if (IsSlotEmpty(slot))
+        {
+            return 0f;
+        }
+        
+        GameData data = GetSlotData(slot);
+        if (data == null || data.isEmpty)
+        {
+            return 0f;
+        }
+        
+        return CalculateProgressPercentage(data.levelsUnlocked);
     }
 
     private void LoadAllSavesFromSupabase()

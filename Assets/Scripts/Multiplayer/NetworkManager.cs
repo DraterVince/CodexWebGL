@@ -173,6 +173,12 @@ public class NetworkManager : MonoBehaviourPunCallbacks
 
     public void ConnectToPhoton()
     {
+        // Show loading screen when connecting to lobby
+        if (LoadingScreenManager.Instance != null)
+        {
+            LoadingScreenManager.Instance.ShowLoadingScreen("Connecting to lobby...");
+        }
+        
         if (PhotonNetwork.IsConnected)
         {
             Debug.Log("[NetworkManager] Already connected to Photon");
@@ -344,6 +350,12 @@ public class NetworkManager : MonoBehaviourPunCallbacks
             connectionRetryCoroutine = null;
         }
 
+        // Update loading message
+        if (LoadingScreenManager.Instance != null)
+        {
+            LoadingScreenManager.Instance.ShowLoadingScreen("Joining lobby...");
+        }
+
         // Join lobby - this will be retried if it fails
         JoinLobbyWithRetry();
     }
@@ -378,6 +390,12 @@ public class NetworkManager : MonoBehaviourPunCallbacks
     public override void OnDisconnected(DisconnectCause cause)
     {
         Debug.Log($"? Disconnected from Photon: {cause}");
+        
+        // Hide loading screen on disconnect
+        if (LoadingScreenManager.Instance != null)
+        {
+            LoadingScreenManager.Instance.HideLoadingScreen();
+        }
         IsConnectedToMaster = false;
         IsInLobby = false;
         
@@ -412,6 +430,12 @@ public class NetworkManager : MonoBehaviourPunCallbacks
         {
             StopCoroutine(lobbyJoinRetryCoroutine);
             lobbyJoinRetryCoroutine = null;
+        }
+        
+        // Hide loading screen when successfully joined lobby
+        if (LoadingScreenManager.Instance != null)
+        {
+            LoadingScreenManager.Instance.HideLoadingScreen();
         }
     }
     
