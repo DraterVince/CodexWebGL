@@ -2375,6 +2375,54 @@ Log($"RPC_SyncCardCounter - Setting counter to {newCounter}");
         Time.timeScale = 1f;
         if (pausePanel != null) pausePanel.SetActive(false);
         
+        // Update leaderboard if victory
+        if (victory)
+        {
+            // Increment levels beaten for ALL players in the room (shared victory)
+            var leaderboardManager = FindObjectOfType<MultiplayerLeaderboardManager>();
+            if (leaderboardManager != null && PhotonNetwork.IsMasterClient)
+            {
+                // Host increments for all players
+                foreach (Player player in PhotonNetwork.PlayerList)
+                {
+                    if (player != null)
+                    {
+                        leaderboardManager.IncrementLevelsBeaten(player.ActorNumber);
+                    }
+                }
+            }
+            else if (leaderboardManager != null)
+            {
+                // Non-host: just increment locally (host will sync via RPC)
+                foreach (Player player in PhotonNetwork.PlayerList)
+                {
+                    if (player != null)
+                    {
+                        leaderboardManager.IncrementLevelsBeatenLocalOnly(player.ActorNumber);
+                    }
+                }
+            }
+            
+            // Update display for local player
+            if (leaderboardManager != null)
+            {
+                leaderboardManager.UpdateLevelsBeatenDisplay();
+            }
+        }
+        else
+        {
+            // Game Over (defeat) - Save session scores to leaderboard
+            var leaderboardManager = FindObjectOfType<MultiplayerLeaderboardManager>();
+            if (leaderboardManager != null)
+            {
+                // Save current session scores (only if they're new bests)
+                leaderboardManager.SaveSessionScoresToLeaderboard();
+                
+                // Update display
+                leaderboardManager.UpdateLevelsBeatenDisplay();
+            }
+        }
+        
         if (victory)
         {
             if (victoryPanel != null) victoryPanel.SetActive(true);
@@ -2390,6 +2438,13 @@ Log($"RPC_SyncCardCounter - Setting counter to {newCounter}");
         {
             if (gameOverPanel != null) gameOverPanel.SetActive(true);
             if (gameOverText != null) gameOverText.text = "GAME OVER\nShared health depleted!";
+            
+            // Update levels beaten display even on defeat (shows current progress)
+            var leaderboardManager = FindObjectOfType<MultiplayerLeaderboardManager>();
+            if (leaderboardManager != null)
+            {
+                leaderboardManager.UpdateLevelsBeatenDisplay();
+            }
         }
     }
     
@@ -2444,6 +2499,13 @@ Log($"RPC_SyncCardCounter - Setting counter to {newCounter}");
     
     public void ReturnToLobby()
     {
+        // Save session scores to leaderboard before leaving
+        var leaderboardManager = FindObjectOfType<MultiplayerLeaderboardManager>();
+        if (leaderboardManager != null && PhotonNetwork.IsMasterClient)
+        {
+            leaderboardManager.SaveSessionScoresToLeaderboard();
+        }
+        
         // Resume time scale before leaving
         Time.timeScale = 1f;
         PhotonNetwork.LoadLevel("MultiplayerLobby");

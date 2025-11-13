@@ -7,6 +7,10 @@ public class MainMenu : MonoBehaviour
     [Header("UI Elements")]
     public Button logoutButton;
     public Text userEmailText; // Optional: shows logged in user
+    public Button leaderboardButton; // Button to open leaderboard
+    
+    [Header("Leaderboard")]
+    public LeaderboardPanel leaderboardPanel; // Reference to leaderboard panel script
 
     private void Start()
     {
@@ -16,9 +20,30 @@ public class MainMenu : MonoBehaviour
             logoutButton.onClick.AddListener(OnLogoutClicked);
         }
         
+        // Setup leaderboard button
+        if (leaderboardButton != null)
+        {
+            leaderboardButton.onClick.AddListener(OnLeaderboardClicked);
+        }
+        
         EnsureUserIdSet();
         // Display user email (optional)
         DisplayUserInfo();
+    }
+    
+    /// <summary>
+    /// Handle leaderboard button click
+    /// </summary>
+    private void OnLeaderboardClicked()
+    {
+        if (leaderboardPanel != null)
+        {
+            leaderboardPanel.OpenLeaderboard();
+        }
+        else
+        {
+            Debug.LogWarning("[MainMenu] LeaderboardPanel not assigned!");
+        }
     }
 
     private void EnsureUserIdSet()

@@ -43,11 +43,15 @@ public class LobbyManager : MonoBehaviourPunCallbacks
   [SerializeField] private Button[] playerKickButtons; // Array of 5 buttons (one per player slot)
     [SerializeField] private TMP_Text[] playerNameTexts; // Text showing player names on each button
     
-  [Header("Kick Confirmation (Optional)")]
+    [Header("Kick Confirmation (Optional)")]
  [SerializeField] private GameObject kickConfirmationPanel; // Panel asking "Kick [PlayerName]?"
     [SerializeField] private TMP_Text kickConfirmationText; // Text showing who will be kicked
     [SerializeField] private Button confirmKickButton; // Confirm kick
     [SerializeField] private Button cancelKickButton; // Cancel kick
+  
+    [Header("Leaderboard")]
+    [SerializeField] private Button leaderboardButton;
+    [SerializeField] private LeaderboardPanel leaderboardPanel;
   
     [Header("Game Settings")]
     [SerializeField] private int minPlayers = 2;
@@ -233,6 +237,13 @@ SetupButtons();
         // Hide kick confirmation panel initially
         if (kickConfirmationPanel != null)
             kickConfirmationPanel.SetActive(false);
+        
+        // Leaderboard button
+        if (leaderboardButton != null && leaderboardPanel != null)
+        {
+            leaderboardButton.onClick.RemoveAllListeners();
+            leaderboardButton.onClick.AddListener(() => leaderboardPanel.OpenLeaderboard());
+        }
     }
 
     #endregion

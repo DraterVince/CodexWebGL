@@ -4540,6 +4540,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   logoutButton: {fileID: 2097612110}
   userEmailText: {fileID: 0}
+  leaderboardButton: {fileID: 0}
+  leaderboardPanel: {fileID: 0}
 --- !u!1 &3607340436461887808
 GameObject:
   m_ObjectHideFlags: 0
