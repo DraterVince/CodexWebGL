@@ -720,36 +720,59 @@ NetworkManager.Instance.LeaveRoom();
     // Update player list with ready status and kick buttons
  if (playerListText != null)
         {
- string playerList = $"Players ({PhotonNetwork.CurrentRoom.PlayerCount}/{maxPlayers}):\n\n";
+            // Ensure the text component and its GameObject are active
+            if (!playerListText.gameObject.activeSelf)
+            {
+                playerListText.gameObject.SetActive(true);
+            }
+            
+            string playerList = $"Players ({PhotonNetwork.CurrentRoom.PlayerCount}/{maxPlayers}):\n\n";
  
 // Sort players by actor number to maintain consistent order
         Player[] sortedPlayers = PhotonNetwork.PlayerList;
      System.Array.Sort(sortedPlayers, (a, b) => a.ActorNumber.CompareTo(b.ActorNumber));
      
-        for (int i = 0; i < sortedPlayers.Length; i++)
-      {
-     Player player = sortedPlayers[i];
- 
-            // Get assigned cosmetic for this position
- string assignedCosmetic = GetCosmeticForPosition(i);
+            if (sortedPlayers.Length == 0)
+            {
+                playerList += "No players in room";
+            }
+            else
+            {
+                for (int i = 0; i < sortedPlayers.Length; i++)
+                {
+                    Player player = sortedPlayers[i];
+                    
+                    if (player == null) continue;
+                    
+                    // Get assigned cosmetic for this position
+                    string assignedCosmetic = GetCosmeticForPosition(i);
      
          playerList += $"� {player.NickName}";
  
-       if (player.IsMasterClient)
-         playerList += " [HOST]";
+                    if (player.IsMasterClient)
+                        playerList += " [HOST]";
          
-  // Show assigned character
-      playerList += $" - {GetCosmeticDisplayName(assignedCosmetic)}";
+                    // Show assigned character
+                    playerList += $" - {GetCosmeticDisplayName(assignedCosmetic)}";
        
-        // NEW: Show ready status
-       bool playerReady = IsPlayerReady(player);
-  playerList += playerReady ? " ? READY" : " ? Not Ready";
+                    // Show ready status
+                    bool playerReady = IsPlayerReady(player);
+                    playerList += playerReady ? " ✓ READY" : " ✗ Not Ready";
        
- playerList += "\n";
-    }
+                    playerList += "\n";
+                }
+            }
   
-  playerListText.text = playerList;
-  }
+            playerListText.text = playerList;
+            
+            // Ensure text is visible (check color and enable raycast target if needed)
+            if (playerListText.color.a < 0.1f)
+            {
+                Color textColor = playerListText.color;
+                textColor.a = 1f;
+                playerListText.color = textColor;
+            }
+        }
     
  // NEW: Update dynamic player list (if set up)
         UpdateDynamicPlayerList();

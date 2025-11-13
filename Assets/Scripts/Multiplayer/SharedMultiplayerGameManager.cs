@@ -2038,10 +2038,10 @@ Log($"RPC_SyncCardCounter - Setting counter to {newCounter}");
         Log($"===== SlideCharacterOffScreenThenAdvanceTurn STARTED for actor {actorNumber} =====");
         Log($"Character: {character?.name}, Active: {character?.activeSelf}, Position: {character?.transform.position}");
         
-        // Wait for attack animation to fully complete (character should be at enemy position now)
-        // CharacterJumpAttack should have already moved the character to the enemy and back
-        // But in multiplayer, it stays at attack position - so we slide from there
-        yield return new WaitForSeconds(0.5f);
+        // Wait for attack animation to fully complete
+        // CharacterJumpAttack moves the character to the enemy, attacks, then returns to original position
+        // Wait long enough for the return jump animation to complete (jumpBackDuration is typically 0.5f)
+        yield return new WaitForSeconds(0.6f);
         
         // CRITICAL: Ensure we're using the correct character reference
         // The character might have been changed by turn switching, so check if it's still the current character
@@ -2063,7 +2063,7 @@ Log($"RPC_SyncCardCounter - Setting counter to {newCounter}");
             Log($"Character {character.name} was inactive - activated for slide animation");
         }
         
-        // Get current position (should be at or near enemy position after attack)
+        // Get current position (character should have returned to original position after attack)
         Vector3 startPos = character.transform.position;
         Vector3 targetPos = offScreenLeft;
         
