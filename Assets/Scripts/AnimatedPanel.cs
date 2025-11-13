@@ -10,7 +10,7 @@ public class AnimatedPanel : MonoBehaviour
     public Vector2 fullPos = new Vector2(0, 0);
     public float animationDuration = 0.3f;
 
-    private bool isExpanded = true; // Start expanded
+    public bool isExpanded = true; // Start expanded (public for sync)
     private float animTime = 0f;
     private Vector2 startSize, startPos, targetSize, targetPos;
     private bool hasStartedTimer = false; // Track if timer has been started
@@ -74,6 +74,12 @@ public class AnimatedPanel : MonoBehaviour
         targetSize = isExpanded ? fullSize : miniSize;
         targetPos = isExpanded ? fullPos : miniPos;
 
+        // In multiplayer: Sync panel state across all players
+        if (isMultiplayerMode)
+        {
+            SyncPanelState();
+        }
+
         // When minimizing panel for the first time, start timer
         if (!isExpanded && !hasStartedTimer)
         {
@@ -89,6 +95,43 @@ public class AnimatedPanel : MonoBehaviour
                 // In single player: Start timer locally
                 StartLocalTimer();
             }
+        }
+    }
+    
+    /// <summary>
+    /// Sync panel state with SharedMultiplayerGameManager
+    /// </summary>
+    private void SyncPanelState()
+    {
+        try
+        {
+            var manager = FindObjectOfType<SharedMultiplayerGameManager>();
+            if (manager != null)
+            {
+                manager.SyncExpectedOutputPanel(isExpanded);
+                Debug.Log($"[AnimatedPanel] Synced panel state: {(isExpanded ? "Expanded" : "Minimized")}");
+            }
+        }
+        catch (System.Exception ex)
+        {
+            Debug.LogWarning($"[AnimatedPanel] Could not sync panel state: {ex.Message}");
+        }
+    }
+    
+    /// <summary>
+    /// Force panel to a specific state (called by RPC)
+    /// </summary>
+    public void SetPanelState(bool expanded)
+    {
+        if (isExpanded != expanded)
+        {
+            // Only toggle if state is different
+            isExpanded = expanded;
+            animTime = 0f;
+            startSize = panelRect.sizeDelta;
+            startPos = panelRect.anchoredPosition;
+            targetSize = isExpanded ? fullSize : miniSize;
+            targetPos = isExpanded ? fullPos : miniPos;
         }
     }
 

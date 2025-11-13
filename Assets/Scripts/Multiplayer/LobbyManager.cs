@@ -53,6 +53,14 @@ public class LobbyManager : MonoBehaviourPunCallbacks
     [SerializeField] private int minPlayers = 2;
     [SerializeField] private int maxPlayers = 5;
     [SerializeField] private string[] availableLevels = { "Level_1", "Level_2", "Level_3" };
+    
+    /// <summary>
+    /// Get available multiplayer levels (for use by SharedMultiplayerGameManager)
+    /// </summary>
+    public string[] GetAvailableLevels()
+    {
+        return availableLevels;
+    }
 
     private string selectedLevel = "";
     private bool isLocalPlayerReady = false;

@@ -48,10 +48,20 @@ public class SharedMultiplayerGameManager : MonoBehaviourPunCallbacks
     [SerializeField] private Transform playerListContainer;
     [SerializeField] private GameObject playerListItemPrefab;
     
-    [Header("Game Over")]
-    [SerializeField] private GameObject gameOverPanel;
-    [SerializeField] private GameObject victoryPanel;
+    [Header("Game Over (Multiplayer)")]
+    [SerializeField] private GameObject gameOverPanel; // Multiplayer game over panel
+    [SerializeField] private GameObject victoryPanel; // Multiplayer victory panel
     [SerializeField] private TextMeshProUGUI gameOverText;
+    [SerializeField] private Button nextLevelButton; // Next Level button (host only, in victory panel)
+    [SerializeField] private Button returnToLobbyButton; // Return to Lobby button (in both panels)
+    
+    [Header("Pause Panel (Multiplayer)")]
+    [SerializeField] private GameObject pausePanel; // Multiplayer pause panel (no level select)
+    [SerializeField] private Button resumeButton; // Resume button
+    [SerializeField] private Button returnToLobbyFromPauseButton; // Return to lobby from pause
+    
+    [Header("Expected Output Panel Sync")]
+    [SerializeField] private AnimatedPanel expectedOutputPanel; // Reference to expected output panel for sync
     
     [Header("References")]
  [SerializeField] private PlayCardButton playCardButton;
@@ -133,6 +143,12 @@ enabled = false;
          return;
         }
      
+        // Setup multiplayer UI buttons
+        SetupMultiplayerUI();
+        
+        // Setup pause system
+        SetupPauseSystem();
+        
            if (turnSystem != null)
         {
             turnSystem.OnTurnChanged += OnTurnChanged;
@@ -214,11 +230,6 @@ enabled = false;
     }
     }
     
-    private void Update()
-    {
-     UpdateHealthUI();
-        UpdateTurnUI();
-    }
     
     #region Shared Health System
     
@@ -2215,6 +2226,141 @@ Log($"RPC_SyncCardCounter - Setting counter to {newCounter}");
     
     #endregion
   
+    #region Multiplayer UI Setup
+    
+    /// <summary>
+    /// Setup multiplayer-specific UI buttons and panels
+    /// </summary>
+    private void SetupMultiplayerUI()
+    {
+        // Setup Next Level button (host only)
+        if (nextLevelButton != null)
+        {
+            nextLevelButton.onClick.RemoveAllListeners();
+            nextLevelButton.onClick.AddListener(OnNextLevelClicked);
+            // Hide button for non-hosts
+            nextLevelButton.gameObject.SetActive(PhotonNetwork.IsMasterClient);
+        }
+        
+        // Setup Return to Lobby buttons
+        if (returnToLobbyButton != null)
+        {
+            returnToLobbyButton.onClick.RemoveAllListeners();
+            returnToLobbyButton.onClick.AddListener(ReturnToLobby);
+        }
+        
+        if (returnToLobbyFromPauseButton != null)
+        {
+            returnToLobbyFromPauseButton.onClick.RemoveAllListeners();
+            returnToLobbyFromPauseButton.onClick.AddListener(ReturnToLobby);
+        }
+        
+        // Ensure panels are hidden initially
+        if (victoryPanel != null) victoryPanel.SetActive(false);
+        if (gameOverPanel != null) gameOverPanel.SetActive(false);
+        if (pausePanel != null) pausePanel.SetActive(false);
+    }
+    
+    /// <summary>
+    /// Setup pause system with synchronization
+    /// </summary>
+    private void SetupPauseSystem()
+    {
+        if (resumeButton != null)
+        {
+            resumeButton.onClick.RemoveAllListeners();
+            resumeButton.onClick.AddListener(ResumeGame);
+        }
+        
+        // Listen for ESC key to pause/unpause
+        // This will be handled in Update()
+    }
+    
+    /// <summary>
+    /// Update loop: Handle ESC key for pause and update UI
+    /// </summary>
+    private void Update()
+    {
+        // Update UI (existing functionality)
+        UpdateHealthUI();
+        UpdateTurnUI();
+        
+        // Handle ESC key for pause (synchronized across all players)
+        if (!isGameOver && Input.GetKeyDown(KeyCode.Escape))
+        {
+            if (pausePanel != null && pausePanel.activeSelf)
+            {
+                // Unpause
+                ResumeGame();
+            }
+            else
+            {
+                // Pause (synchronized)
+                PauseGame();
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Pause game for all players (synchronized)
+    /// </summary>
+    public void PauseGame()
+    {
+        if (isGameOver) return;
+        
+        // Send RPC to pause for all players
+        photonView.RPC("RPC_PauseGame", RpcTarget.All);
+    }
+    
+    /// <summary>
+    /// Resume game for all players (synchronized)
+    /// </summary>
+    public void ResumeGame()
+    {
+        // Send RPC to resume for all players
+        photonView.RPC("RPC_ResumeGame", RpcTarget.All);
+    }
+    
+    [PunRPC]
+    void RPC_PauseGame()
+    {
+        Time.timeScale = 0f;
+        if (pausePanel != null) pausePanel.SetActive(true);
+        Log("Game paused (synchronized)");
+    }
+    
+    [PunRPC]
+    void RPC_ResumeGame()
+    {
+        Time.timeScale = 1f;
+        if (pausePanel != null) pausePanel.SetActive(false);
+        Log("Game resumed (synchronized)");
+    }
+    
+    /// <summary>
+    /// Synchronize expected output panel minimize/maximize across all players
+    /// </summary>
+    public void SyncExpectedOutputPanel(bool isExpanded)
+    {
+        if (photonView != null && PhotonNetwork.IsConnected)
+        {
+            photonView.RPC("RPC_SyncExpectedOutputPanel", RpcTarget.All, isExpanded);
+        }
+    }
+    
+    [PunRPC]
+    void RPC_SyncExpectedOutputPanel(bool isExpanded)
+    {
+        if (expectedOutputPanel != null)
+        {
+            // Use SetPanelState to avoid triggering sync again
+            expectedOutputPanel.SetPanelState(isExpanded);
+            Log($"Synced expected output panel: {(isExpanded ? "Expanded" : "Minimized")}");
+        }
+    }
+    
+    #endregion
+    
     #region Game Over
     
     [PunRPC]
@@ -2224,16 +2370,67 @@ Log($"RPC_SyncCardCounter - Setting counter to {newCounter}");
         DisablePlayerControls();
         HideMultiplayerUI();
         
+        // Resume game if paused
+        Time.timeScale = 1f;
+        if (pausePanel != null) pausePanel.SetActive(false);
+        
         if (victory)
         {
             if (victoryPanel != null) victoryPanel.SetActive(true);
             if (gameOverText != null) gameOverText.text = "VICTORY!\nAll enemies defeated!";
+            
+            // Show Next Level button only for host
+            if (nextLevelButton != null)
+            {
+                nextLevelButton.gameObject.SetActive(PhotonNetwork.IsMasterClient);
+            }
         }
         else
         {
             if (gameOverPanel != null) gameOverPanel.SetActive(true);
             if (gameOverText != null) gameOverText.text = "GAME OVER\nShared health depleted!";
         }
+    }
+    
+    /// <summary>
+    /// Called when Next Level button is clicked (host only)
+    /// </summary>
+    private void OnNextLevelClicked()
+    {
+        if (!PhotonNetwork.IsMasterClient)
+        {
+            LogWarning("Non-host tried to click Next Level button!");
+            return;
+        }
+        
+        LoadNextRandomLevel();
+    }
+    
+    /// <summary>
+    /// Load next random level from available multiplayer levels
+    /// </summary>
+    private void LoadNextRandomLevel()
+    {
+        // Get available levels from LobbyManager
+        var lobbyManager = FindObjectOfType<LobbyManager>();
+        if (lobbyManager != null)
+        {
+            string[] availableLevels = lobbyManager.GetAvailableLevels();
+            if (availableLevels != null && availableLevels.Length > 0)
+            {
+                // Pick random level
+                string randomLevel = availableLevels[Random.Range(0, availableLevels.Length)];
+                Log($"Loading next random level: {randomLevel}");
+                PhotonNetwork.LoadLevel(randomLevel);
+                return;
+            }
+        }
+        
+        // Fallback: use hardcoded levels if LobbyManager not found
+        string[] fallbackLevels = { "Part1Level1", "Part1Level2", "Part1Level3" };
+        string randomLevelFallback = fallbackLevels[Random.Range(0, fallbackLevels.Length)];
+        LogWarning($"LobbyManager not found, using fallback level: {randomLevelFallback}");
+        PhotonNetwork.LoadLevel(randomLevelFallback);
     }
     
     public void RestartLevel()
@@ -2246,6 +2443,8 @@ Log($"RPC_SyncCardCounter - Setting counter to {newCounter}");
     
     public void ReturnToLobby()
     {
+        // Resume time scale before leaving
+        Time.timeScale = 1f;
         PhotonNetwork.LoadLevel("MultiplayerLobby");
     }
     

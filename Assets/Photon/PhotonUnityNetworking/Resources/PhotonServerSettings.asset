@@ -67,6 +67,9 @@ MonoBehaviour:
   - RPC_StopTimer
   - RPC_SyncCorrectAnswer
   - RPC_SyncAllCounters
+  - RPC_PauseGame
+  - RPC_ResumeGame
+  - RPC_SyncExpectedOutputPanel
   DisableAutoOpenWizard: 1
   ShowSettings: 1
   DevRegionSetOnce: 1
