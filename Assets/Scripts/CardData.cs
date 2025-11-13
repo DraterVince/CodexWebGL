@@ -17,6 +17,10 @@ public class CardData : ScriptableObject
     [TextArea(3, 6)]
     public string cardDescription;
     
+    [Header("Example")]
+    [TextArea(2, 4)]
+    public string cardExample;
+    
     [Header("Stats (Optional)")]
     public string cardType; // e.g., "Attack", "Defense", "Special"
     public int cardValue;

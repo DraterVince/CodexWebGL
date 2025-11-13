@@ -1386,7 +1386,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Singleplayer
+  m_text: SOLO
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 770684ce3478dfc4097b95587d65ea45, type: 2}
   m_sharedMaterial: {fileID: 7933692809733057400, guid: 770684ce3478dfc4097b95587d65ea45, type: 2}
@@ -1874,6 +1874,7 @@ GameObject:
   - component: {fileID: 796660115}
   - component: {fileID: 796660117}
   - component: {fileID: 796660116}
+  - component: {fileID: 796660118}
   m_Layer: 5
   m_Name: SettingsPanel
   m_TagString: Untagged
@@ -1939,6 +1940,25 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 796660114}
   m_CullTransparentMesh: 1
+--- !u!114 &796660118
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 796660114}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0914142ea9f88ef4981ff5eb069baf05, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  masterVolumeSlider: {fileID: 0}
+  sfxVolumeSlider: {fileID: 0}
+  musicVolumeSlider: {fileID: 0}
+  autoFindSliders: 1
+  masterSliderName: MasterVolumeSlider
+  sfxSliderName: SFXVolumeSlider
+  musicSliderName: MusicVolumeSlider
 --- !u!1 &816258801
 GameObject:
   m_ObjectHideFlags: 0
@@ -4023,7 +4043,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Multiplayer
+  m_text: CO-OP
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 770684ce3478dfc4097b95587d65ea45, type: 2}
   m_sharedMaterial: {fileID: 7933692809733057400, guid: 770684ce3478dfc4097b95587d65ea45, type: 2}
