@@ -594,10 +594,25 @@ NetworkManager.Instance.LeaveRoom();
         if (playerListContainer == null || playerEntryPrefab == null)
         {
             // Dynamic player list not set up - skip
+            if (playerListContainer == null)
+            {
+                Debug.LogWarning("[LobbyManager] playerListContainer is null! Assign it in the Inspector.");
+            }
+            if (playerEntryPrefab == null)
+            {
+                Debug.LogWarning("[LobbyManager] playerEntryPrefab is null! Assign it in the Inspector.");
+            }
             return;
         }
 
         if (!PhotonNetwork.InRoom) return;
+        
+        // Ensure container is active
+        if (!playerListContainer.gameObject.activeSelf)
+        {
+            playerListContainer.gameObject.SetActive(true);
+            Debug.Log("[LobbyManager] Activated playerListContainer");
+        }
 
         // Get sorted players
         Player[] sortedPlayers = PhotonNetwork.PlayerList;
@@ -644,11 +659,32 @@ NetworkManager.Instance.LeaveRoom();
             {
                 // Create new entry
                 GameObject entryObj = Instantiate(playerEntryPrefab, playerListContainer);
+                
+                // CRITICAL FIX: Ensure the instantiated object is active and properly scaled
+                entryObj.SetActive(true);
+                entryObj.transform.localScale = Vector3.one;
+                
+                // CRITICAL FIX: Fix any child objects with scale 0 (common prefab issue)
+                // The prefab has a Canvas child with scale (0,0,0) which makes it invisible
+                foreach (Transform child in entryObj.GetComponentsInChildren<Transform>(true))
+                {
+                    if (child.localScale == Vector3.zero)
+                    {
+                        Debug.LogWarning($"[LobbyManager] Found child '{child.name}' with scale 0 in prefab, fixing it");
+                        child.localScale = Vector3.one;
+                    }
+                }
 
                 // IMPORTANT: Get OUR custom PlayerListEntry (not the Photon demo one!)
                 // The Photon demo one is in namespace Photon.Pun.Demo.Asteroids
                 // Ours is in the global namespace
                 PlayerListEntry entry = entryObj.GetComponent<PlayerListEntry>();
+                
+                // If not on root, try to find it in children
+                if (entry == null)
+                {
+                    entry = entryObj.GetComponentInChildren<PlayerListEntry>();
+                }
 
                 // Double-check it's not the Photon demo version
                 if (entry != null && entry.GetType().Namespace == "Photon.Pun.Demo.Asteroids")
@@ -665,11 +701,11 @@ NetworkManager.Instance.LeaveRoom();
                     entry.Initialize(player, playerIsHost, canKick, OnKickButtonClicked);
                     playerEntries.Add(entry);
 
-                    Debug.Log($"[LobbyManager] Added player entry for: {player.NickName}");
+                    Debug.Log($"[LobbyManager] Added player entry for: {player.NickName} (Host: {playerIsHost}, CanKick: {canKick})");
                 }
                 else
                 {
-                    Debug.LogError("[LobbyManager] PlayerListEntry component missing on prefab! Make sure the prefab has YOUR custom PlayerListEntry script (not the Photon demo one).");
+                    Debug.LogError($"[LobbyManager] PlayerListEntry component missing on prefab! GameObject: {entryObj.name}, Active: {entryObj.activeSelf}, Scale: {entryObj.transform.localScale}");
                     Destroy(entryObj);
                 }
             }
