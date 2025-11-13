@@ -74,13 +74,8 @@ public class AnimatedPanel : MonoBehaviour
         targetSize = isExpanded ? fullSize : miniSize;
         targetPos = isExpanded ? fullPos : miniPos;
 
-        // In multiplayer: Sync panel state across all players
-        if (isMultiplayerMode)
-        {
-            SyncPanelState();
-        }
-
         // When minimizing panel for the first time, start timer
+        // This happens BEFORE sync so the timer starts locally first
         if (!isExpanded && !hasStartedTimer)
         {
             hasStartedTimer = true;
@@ -95,6 +90,13 @@ public class AnimatedPanel : MonoBehaviour
                 // In single player: Start timer locally
                 StartLocalTimer();
             }
+        }
+
+        // In multiplayer: Sync panel state across all players (AFTER local state is set)
+        // This ensures other players also get the click event logic (timer start, etc.)
+        if (isMultiplayerMode)
+        {
+            SyncPanelState();
         }
     }
     
@@ -120,8 +122,9 @@ public class AnimatedPanel : MonoBehaviour
     
     /// <summary>
     /// Force panel to a specific state (called by RPC)
+    /// This also triggers the same logic as OnPanelClicked() for syncing
     /// </summary>
-    public void SetPanelState(bool expanded)
+    public void SetPanelState(bool expanded, bool triggerClickLogic = true)
     {
         if (isExpanded != expanded)
         {
@@ -132,6 +135,23 @@ public class AnimatedPanel : MonoBehaviour
             startPos = panelRect.anchoredPosition;
             targetSize = isExpanded ? fullSize : miniSize;
             targetPos = isExpanded ? fullPos : miniPos;
+            
+            // If triggering click logic (for sync), also handle timer start
+            if (triggerClickLogic && !isExpanded && !hasStartedTimer)
+            {
+                hasStartedTimer = true;
+                
+                if (isMultiplayerMode)
+                {
+                    // In multiplayer: Sync timer across all players
+                    StartSyncedTimer();
+                }
+                else
+                {
+                    // In single player: Start timer locally
+                    StartLocalTimer();
+                }
+            }
         }
     }
 

@@ -2353,8 +2353,9 @@ Log($"RPC_SyncCardCounter - Setting counter to {newCounter}");
     {
         if (expectedOutputPanel != null)
         {
-            // Use SetPanelState to avoid triggering sync again
-            expectedOutputPanel.SetPanelState(isExpanded);
+            // Use SetPanelState with triggerClickLogic=true to also trigger timer start logic
+            // This ensures that when one player clicks the panel, all players get the same behavior
+            expectedOutputPanel.SetPanelState(isExpanded, triggerClickLogic: true);
             Log($"Synced expected output panel: {(isExpanded ? "Expanded" : "Minimized")}");
         }
     }
