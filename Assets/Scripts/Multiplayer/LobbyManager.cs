@@ -53,16 +53,6 @@ public class LobbyManager : MonoBehaviourPunCallbacks
     [SerializeField] private int minPlayers = 2;
     [SerializeField] private int maxPlayers = 5;
     [SerializeField] private string[] availableLevels = { "Level_1", "Level_2", "Level_3" };
-    
-    [Header("Cosmetic Assignment")]
-    [Tooltip("Cosmetic IDs assigned based on player position (1st, 2nd, 3rd, 4th, 5th)")]
-    [SerializeField] private string[] positionBasedCosmetics = { 
-        "Knight",  // 1st player - Change to your character!
- "Ronin",   // 2nd player - Change to your character!
-     "Daimyo",   // 3rd player - Change to your character!
-        "King",    // 4th player - Change to your character!
-        "DemonGirl"    // 5th player - Change to your character!
-    };
 
     private string selectedLevel = "";
     private bool isLocalPlayerReady = false;
@@ -744,16 +734,13 @@ NetworkManager.Instance.LeaveRoom();
                     
                     if (player == null) continue;
                     
-                    // Get assigned cosmetic for this position
-                    string assignedCosmetic = GetCosmeticForPosition(i);
      
-         playerList += $"� {player.NickName}";
+                             // Use a simple bullet point character that works in all fonts
+                    playerList += $"•� {player.NickName}";
  
                     if (player.IsMasterClient)
                         playerList += " [HOST]";
          
-                    // Show assigned character
-                    playerList += $" - {GetCosmeticDisplayName(assignedCosmetic)}";
        
                     // Show ready status
                     bool playerReady = IsPlayerReady(player);
@@ -1149,48 +1136,6 @@ playerPendingKick = null;
             }
    }
  }
-    
-    #endregion
-    
-    #region Cosmetic Helpers
-    
-    /// <summary>
-    /// Get cosmetic ID for a given position (0 = first player, 1 = second player, etc.)
-    /// </summary>
-    public string GetCosmeticForPosition(int position)
-    {
-        if (positionBasedCosmetics == null || position < 0 || position >= positionBasedCosmetics.Length)
- {
-     Debug.LogWarning($"[LobbyManager] Invalid position {position}, returning 'Default'");
-     return "Default";
-        }
-        
-  string cosmetic = positionBasedCosmetics[position];
-        if (string.IsNullOrWhiteSpace(cosmetic))
-        {
-            Debug.LogWarning($"[LobbyManager] Position {position} has empty cosmetic, returning 'Default'");
-            return "Default";
-        }
-        
-        return cosmetic;
-    }
-    
-    /// <summary>
-    /// Get a display-friendly name for a cosmetic ID
-    /// </summary>
-    private string GetCosmeticDisplayName(string cosmeticId)
-{
-        if (string.IsNullOrEmpty(cosmeticId) || cosmeticId == "default")
-  {
-      return "Default";
-        }
-        
-        // Add spaces before capital letters for better readability
-        // Example: "DemonGirl" -> "Demon Girl"
-        string displayName = System.Text.RegularExpressions.Regex.Replace(cosmeticId, "(\\B[A-Z])", " $1");
-
-        return displayName;
-    }
     
     #endregion
 }

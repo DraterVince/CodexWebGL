@@ -18,7 +18,7 @@ public class NetworkPlayer : MonoBehaviourPunCallbacks, IPunObservable
     [SerializeField] private bool syncRotation = true;
     [SerializeField] private float smoothing = 10f;
 
-    private PhotonView photonView;
+    private new PhotonView photonView;
     private Vector3 networkPosition;
     private Quaternion networkRotation;
 

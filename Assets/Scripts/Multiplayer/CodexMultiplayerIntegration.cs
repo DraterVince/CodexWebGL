@@ -9,14 +9,14 @@ using Photon.Realtime;
 public class CodexMultiplayerIntegration : MonoBehaviourPunCallbacks
 {
     [Header("Integration Settings")]
-    [SerializeField] private bool syncLevelsUnlocked = true;
-    [SerializeField] private bool syncCosmetics = true;
+    [SerializeField] private bool _syncLevelsUnlocked = true; // Reserved for future use
+    [SerializeField] private bool _syncCosmetics = true; // Reserved for future use
 
     [Header("Turn System Settings")]
     [SerializeField] private float turnTimeLimit = 30f; // Time limit per turn in seconds
     [SerializeField] private bool enableTurnTimer = true;
 
-    private PhotonView photonView;
+    private new PhotonView photonView;
     
   // Reference to your existing managers
     private NewAndLoadGameManager saveManager;
@@ -30,7 +30,7 @@ public class CodexMultiplayerIntegration : MonoBehaviourPunCallbacks
     private bool hasTimedOut = false;
     
     // Prevent log spam from GetCurrentTurnPlayer() called every frame
-    private bool hasLoggedMissingTurnProperty = false;
+    private bool _hasLoggedMissingTurnProperty = false; // Reserved for future use
 
  // Events for turn changes
     public System.Action<Player> OnTurnChanged;

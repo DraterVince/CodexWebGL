@@ -24,7 +24,7 @@ public class CharacterSelectionManager : MonoBehaviour
     
     [Header("Settings")]
     [Tooltip("Save last selected character")]
-    [SerializeField] private bool saveSelection = true;
+    [SerializeField] private bool _saveSelection = true; // Reserved for future use
     
     [Tooltip("Use DontDestroyOnLoad (keep manager across scenes)")]
     [SerializeField] private bool persistAcrossScenes = false;

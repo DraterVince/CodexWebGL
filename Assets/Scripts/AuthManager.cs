@@ -69,7 +69,7 @@ public class AuthManager : MonoBehaviour
 
        return true;
         }
-        catch (Exception ex)
+        catch (Exception _ex)
    {
        return false;
    }
@@ -102,7 +102,7 @@ try
 
        return true;
         }
-        catch (Exception ex)
+        catch (Exception _ex)
    {
  return false;
         }

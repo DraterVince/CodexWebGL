@@ -88,7 +88,7 @@ public class PlayerDataManager : MonoBehaviour
         
 return true;
         }
-      catch (Exception ex)
+      catch (Exception _ex)
         {
      return false;
   }
@@ -151,7 +151,7 @@ current_money = 0,
                 return null;
             }
         }
-        catch (Exception ex)
+        catch (Exception _ex)
         {
             return null;
         }
@@ -188,7 +188,7 @@ current_money = 0,
             
             return true;
         }
-        catch (Exception ex)
+        catch (Exception _ex)
         {
             return false;
         }
@@ -279,7 +279,7 @@ current_money = 0,
                     await UpdatePlayerData(currentPlayerData);
                 }
             }
-            catch (Exception ex)
+            catch (Exception _ex)
             {
             }
         }
@@ -529,7 +529,7 @@ username = guestUsername,
         try
      {
    }
-        catch (Exception ex)
+        catch (Exception _ex)
         {
         }
     }

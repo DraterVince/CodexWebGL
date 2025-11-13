@@ -29,7 +29,7 @@ public class SharedMultiplayerGameManager : MonoBehaviourPunCallbacks
     [Header("Character Display")]
     [Tooltip("Position where multiplayer player characters are displayed when it's their turn. This is where characters appear after sliding in from the right.")]
     [SerializeField] private Transform characterDisplayPosition;
-    [SerializeField] private float characterSlideSpeed = 5f;
+    [SerializeField] private float _characterSlideSpeed = 5f; // Reserved for future use
     [Tooltip("Initial spawn position for multiplayer characters (off-screen left). Characters are instantiated here, then slide to characterDisplayPosition when shown.")]
     [SerializeField] private Vector3 offScreenLeft = new Vector3(-15f, 0f, 0f);
     [Tooltip("Position where characters slide in from (off-screen right). Characters slide from here to characterDisplayPosition when switching turns.")]
@@ -61,7 +61,7 @@ public class SharedMultiplayerGameManager : MonoBehaviourPunCallbacks
     // Game state
     private float currentSharedHealth;
     private bool isGameOver = false;
-    private PhotonView photonView;
+    private new PhotonView photonView;
 private Dictionary<int, GameObject> playerCharacters = new Dictionary<int, GameObject>();
     private GameObject currentCharacterInstance;
     private bool isSwitchingCharacter = false;

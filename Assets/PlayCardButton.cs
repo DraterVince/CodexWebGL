@@ -56,8 +56,8 @@ public class PlayCardButton : MonoBehaviour
     private Button playButton;
     private bool isMultiplayerMode = false;
     private bool delayHealthUIUpdate = false;
-    private float pendingEnemyHealth = -1f;
-    private float pendingPlayerHealth = -1f;
+    private float _pendingEnemyHealth = -1f; // Reserved for future use
+    private float _pendingPlayerHealth = -1f; // Reserved for future use
 
     private void Start()
     {
@@ -407,7 +407,7 @@ PlayerTakeDamage(1);
                 }
             }
         }
-        catch (System.Exception ex)
+        catch (System.Exception _ex)
         {
         }
     }
@@ -451,7 +451,7 @@ PlayerTakeDamage(1);
                 }
             }
         }
-        catch (System.Exception ex)
+        catch (System.Exception _ex)
         {
         }
         return true;
@@ -623,7 +623,7 @@ enemyHP.text = enemyHealthAmount[enemyManager.counter].ToString() + " / " + enem
                 }
             }
         }
-        catch (System.Exception ex)
+        catch (System.Exception _ex)
         {
         }
     }
@@ -652,7 +652,7 @@ enemyHP.text = enemyHealthAmount[enemyManager.counter].ToString() + " / " + enem
                 }
             }
         }
-        catch (System.Exception ex)
+        catch (System.Exception _ex)
         {
         }
     }
