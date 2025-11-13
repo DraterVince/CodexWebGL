@@ -15,6 +15,7 @@ public class AnimatedPanel : MonoBehaviour
     private Vector2 startSize, startPos, targetSize, targetPos;
     private bool hasStartedTimer = false; // Track if timer has been started
     private bool isMultiplayerMode = false;
+    private bool isSyncingFromRPC = false; // Flag to prevent infinite sync loops
 
     void Start()
     {
@@ -65,9 +66,21 @@ public class AnimatedPanel : MonoBehaviour
         }
     }
 
-    public void OnPanelClicked()
+    /// <summary>
+    /// Called when panel is clicked. Can be called with a specific state for syncing.
+    /// </summary>
+    public void OnPanelClicked(bool? forceState = null)
     {
-        isExpanded = !isExpanded;
+        // If forceState is provided, use it; otherwise toggle
+        if (forceState.HasValue)
+        {
+            isExpanded = forceState.Value;
+        }
+        else
+        {
+            isExpanded = !isExpanded;
+        }
+        
         animTime = 0f;
         startSize = panelRect.sizeDelta;
         startPos = panelRect.anchoredPosition;
@@ -92,9 +105,18 @@ public class AnimatedPanel : MonoBehaviour
             }
         }
 
+        // Trigger Unity Button onClick events if this GameObject has a Button component
+        // This ensures any gameobjects activated by the button's onClick event will be activated
+        Button button = GetComponent<Button>();
+        if (button != null && button.onClick != null)
+        {
+            button.onClick.Invoke();
+        }
+
         // In multiplayer: Sync panel state across all players (AFTER local state is set)
         // This ensures other players also get the click event logic (timer start, etc.)
-        if (isMultiplayerMode)
+        // Skip sync if this call came from an RPC to prevent infinite loops
+        if (isMultiplayerMode && !isSyncingFromRPC)
         {
             SyncPanelState();
         }
@@ -122,35 +144,29 @@ public class AnimatedPanel : MonoBehaviour
     
     /// <summary>
     /// Force panel to a specific state (called by RPC)
-    /// This also triggers the same logic as OnPanelClicked() for syncing
+    /// This triggers the full OnPanelClicked() logic to ensure all click events fire
     /// </summary>
     public void SetPanelState(bool expanded, bool triggerClickLogic = true)
     {
         if (isExpanded != expanded)
         {
-            // Only toggle if state is different
-            isExpanded = expanded;
-            animTime = 0f;
-            startSize = panelRect.sizeDelta;
-            startPos = panelRect.anchoredPosition;
-            targetSize = isExpanded ? fullSize : miniSize;
-            targetPos = isExpanded ? fullPos : miniPos;
-            
-            // If triggering click logic (for sync), also handle timer start
-            if (triggerClickLogic && !isExpanded && !hasStartedTimer)
+            if (triggerClickLogic)
             {
-                hasStartedTimer = true;
-                
-                if (isMultiplayerMode)
-                {
-                    // In multiplayer: Sync timer across all players
-                    StartSyncedTimer();
-                }
-                else
-                {
-                    // In single player: Start timer locally
-                    StartLocalTimer();
-                }
+                // If we need to trigger full click logic, call OnPanelClicked() with the desired state
+                // This ensures all Unity Button onClick events fire and gameobjects are activated
+                isSyncingFromRPC = true;
+                OnPanelClicked(expanded); // Pass the desired state directly
+                isSyncingFromRPC = false;
+            }
+            else
+            {
+                // Just change visual state without triggering click logic
+                isExpanded = expanded;
+                animTime = 0f;
+                startSize = panelRect.sizeDelta;
+                startPos = panelRect.anchoredPosition;
+                targetSize = isExpanded ? fullSize : miniSize;
+                targetPos = isExpanded ? fullPos : miniPos;
             }
         }
     }
