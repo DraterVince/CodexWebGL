@@ -41,18 +41,8 @@ public class MainMenu : MonoBehaviour
         if (leaderboardPanel != null)
         {
             Debug.Log("[MainMenu] Calling leaderboardPanel.OpenLeaderboard()");
-            leaderboardPanel.OpenLeaderboard();
-            
-            // Hide the leaderboard button when clicked
-            if (leaderboardButton != null)
-            {
-                Debug.Log("[MainMenu] Hiding leaderboard button");
-                leaderboardButton.gameObject.SetActive(false);
-            }
-            else
-            {
-                Debug.LogWarning("[MainMenu] leaderboardButton is null!");
-            }
+            // Pass the button reference so LeaderboardPanel can hide it after verifying panel is visible
+            leaderboardPanel.OpenLeaderboard(leaderboardButton);
         }
         else
         {

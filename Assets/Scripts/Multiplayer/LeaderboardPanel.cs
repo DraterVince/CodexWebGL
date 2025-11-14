@@ -70,18 +70,55 @@ public class LeaderboardPanel : MonoBehaviour
     /// <summary>
     /// Open and display the leaderboard
     /// </summary>
-    public void OpenLeaderboard()
+    /// <param name="buttonToHide">Optional: Button to hide after panel is confirmed visible</param>
+    public void OpenLeaderboard(Button buttonToHide = null)
     {
         Debug.Log("[LeaderboardPanel] OpenLeaderboard called");
+        
+        // Use provided button or fall back to assigned reference
+        if (buttonToHide != null)
+        {
+            leaderboardButton = buttonToHide;
+        }
         
         // CRITICAL: Check if panel reference exists FIRST - don't hide button if panel can't be shown
         if (leaderboardPanel == null)
         {
-            Debug.LogError("[LeaderboardPanel] leaderboardPanel GameObject is NULL! Cannot open leaderboard. Please assign it in the Inspector.");
-            return; // Don't hide button if we can't show panel
+            // Try to find the panel by name as a fallback
+            GameObject foundPanel = GameObject.Find("LeaderboardPanel");
+            if (foundPanel == null)
+            {
+                // Try other common names
+                foundPanel = GameObject.Find("Leaderboard");
+            }
+            
+            if (foundPanel != null)
+            {
+                leaderboardPanel = foundPanel;
+                Debug.LogWarning($"[LeaderboardPanel] leaderboardPanel was not assigned in Inspector, but found by name: {foundPanel.name}. Please assign it in the Inspector for better performance.");
+            }
+            else
+            {
+                Debug.LogError("[LeaderboardPanel] leaderboardPanel GameObject is NULL and could not be found by name! Cannot open leaderboard. Please assign it in the Inspector.");
+                return; // Don't hide button if we can't show panel
+            }
         }
         
-        Debug.Log($"[LeaderboardPanel] Activating leaderboard panel: {leaderboardPanel.name}");
+        // Verify the panel GameObject is valid and not destroyed
+        if (leaderboardPanel == null)
+        {
+            Debug.LogError("[LeaderboardPanel] leaderboardPanel is NULL after assignment! This should not happen.");
+            return;
+        }
+        
+        // Check if the GameObject was destroyed
+        if (leaderboardPanel.GetInstanceID() == 0)
+        {
+            Debug.LogError("[LeaderboardPanel] leaderboardPanel GameObject appears to be destroyed or invalid!");
+            return;
+        }
+        
+        Debug.Log($"[LeaderboardPanel] Activating leaderboard panel: {leaderboardPanel.name} (InstanceID: {leaderboardPanel.GetInstanceID()})");
         
         // Ensure parent objects are active
         Transform parent = leaderboardPanel.transform.parent;
@@ -105,17 +142,57 @@ public class LeaderboardPanel : MonoBehaviour
                 canvas.gameObject.SetActive(true);
             }
             
-            // Bring canvas to front by setting high sorting order
-            if (canvas.overrideSorting == false || canvas.sortingOrder < 100)
+            // Check for other canvases that might be in front
+            Canvas[] allCanvases = FindObjectsOfType<Canvas>();
+            int maxSortingOrder = 0;
+            foreach (Canvas c in allCanvases)
+            {
+                if (c.overrideSorting && c.sortingOrder > maxSortingOrder)
+                {
+                    maxSortingOrder = c.sortingOrder;
+                }
+            }
+            
+            // Set sorting order higher than any other canvas
+            int targetSortingOrder = Mathf.Max(100, maxSortingOrder + 10);
+            if (canvas.overrideSorting == false || canvas.sortingOrder < targetSortingOrder)
             {
                 canvas.overrideSorting = true;
-                canvas.sortingOrder = 100; // High sorting order to bring to front
-                Debug.Log($"[LeaderboardPanel] Canvas sorting order set to {canvas.sortingOrder}");
+                canvas.sortingOrder = targetSortingOrder;
+                Debug.Log($"[LeaderboardPanel] Canvas sorting order set to {canvas.sortingOrder} (max found: {maxSortingOrder})");
             }
+            
+            // Ensure canvas has GraphicRaycaster for interaction
+            if (canvas.GetComponent<UnityEngine.UI.GraphicRaycaster>() == null)
+            {
+                canvas.gameObject.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+                Debug.Log("[LeaderboardPanel] Added GraphicRaycaster to canvas");
+            }
+        }
+        else
+        {
+            Debug.LogError("[LeaderboardPanel] No Canvas found! Panel cannot be displayed. Adding Canvas component...");
+            // Try to add a canvas if none exists
+            canvas = leaderboardPanel.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.overrideSorting = true;
+            canvas.sortingOrder = 1000; // Very high to ensure it's on top
+            leaderboardPanel.AddComponent<UnityEngine.UI.GraphicRaycaster>();
+            leaderboardPanel.AddComponent<UnityEngine.UI.CanvasScaler>();
+            Debug.LogWarning("[LeaderboardPanel] Added Canvas component to panel - this is unusual, check your scene setup!");
         }
         
         // Bring panel to front in hierarchy (renders on top)
+        // Keep panel in its original parent but bring it to front
         leaderboardPanel.transform.SetAsLastSibling();
+        
+        // Also ensure the parent is at the front of its siblings
+        Transform panelParent = leaderboardPanel.transform.parent;
+        if (panelParent != null && panelParent.parent != null)
+        {
+            panelParent.SetAsLastSibling();
+            Debug.Log($"[LeaderboardPanel] Panel and parent brought to front in hierarchy");
+        }
         
         // Ensure CanvasGroup alpha is 1 (fully visible)
         CanvasGroup canvasGroup = leaderboardPanel.GetComponent<CanvasGroup>();
@@ -134,27 +211,71 @@ public class LeaderboardPanel : MonoBehaviour
             // Make sure image is enabled and visible
             panelImage.enabled = true;
             Color imageColor = panelImage.color;
-            if (imageColor.a < 0.1f)
+            // Force alpha to be visible (at least 0.9)
+            if (imageColor.a < 0.9f)
             {
-                // If image is nearly transparent, make it visible
-                imageColor.a = 1f;
+                imageColor.a = 0.9f;
                 panelImage.color = imageColor;
-                Debug.Log("[LeaderboardPanel] Panel Image alpha was low, set to 1");
+                Debug.Log($"[LeaderboardPanel] Panel Image alpha was {imageColor.a}, set to 0.9 for visibility");
             }
-            Debug.Log($"[LeaderboardPanel] Panel Image color: {imageColor}, enabled: {panelImage.enabled}");
+            Debug.Log($"[LeaderboardPanel] Panel Image color: {imageColor}, enabled: {panelImage.enabled}, raycastTarget: {panelImage.raycastTarget}");
         }
         else
         {
             Debug.LogWarning("[LeaderboardPanel] Panel has no Image component! Adding one for visibility...");
             // Add an Image component for visibility
             panelImage = leaderboardPanel.AddComponent<Image>();
-            panelImage.color = new Color(0, 0, 0, 0.8f); // Semi-transparent black background
+            panelImage.color = new Color(0, 0, 0, 0.9f); // Semi-transparent black background
+            panelImage.raycastTarget = true; // Allow raycasting
             Debug.Log("[LeaderboardPanel] Added Image component with semi-transparent black background");
         }
         
+        // CRITICAL: Ensure the panel's RectTransform is properly set up
+        RectTransform panelRect = leaderboardPanel.GetComponent<RectTransform>();
+        if (panelRect != null)
+        {
+            // Force the panel to fill the entire screen
+            panelRect.anchorMin = Vector2.zero;
+            panelRect.anchorMax = Vector2.one;
+            panelRect.offsetMin = Vector2.zero;
+            panelRect.offsetMax = Vector2.zero;
+            Debug.Log("[LeaderboardPanel] Panel RectTransform set to fill screen");
+        }
+        
+        // CRITICAL: Activate the panel and verify it stays active
+        Debug.Log($"[LeaderboardPanel] BEFORE activation - Panel activeSelf: {leaderboardPanel.activeSelf}, activeInHierarchy: {leaderboardPanel.activeInHierarchy}");
+        
         // Activate the panel
         leaderboardPanel.SetActive(true);
-        Debug.Log($"[LeaderboardPanel] Panel activated. activeSelf: {leaderboardPanel.activeSelf}, activeInHierarchy: {leaderboardPanel.activeInHierarchy}");
+        UnityEngine.Canvas.ForceUpdateCanvases();
+        
+        // Verify activation immediately
+        if (!leaderboardPanel.activeSelf)
+        {
+            Debug.LogError("[LeaderboardPanel] Panel SetActive(true) FAILED! Panel reference might be wrong or destroyed.");
+            Debug.LogError($"[LeaderboardPanel] Panel GameObject: {(leaderboardPanel == null ? "NULL" : leaderboardPanel.name)}, InstanceID: {(leaderboardPanel == null ? "N/A" : leaderboardPanel.GetInstanceID().ToString())}");
+            return; // Don't hide button if panel can't be activated
+        }
+        
+        Debug.Log($"[LeaderboardPanel] AFTER activation - Panel activeSelf: {leaderboardPanel.activeSelf}, activeInHierarchy: {leaderboardPanel.activeInHierarchy}");
+        
+        // CRITICAL: Ensure all children are active (they might be inactive)
+        for (int i = 0; i < leaderboardPanel.transform.childCount; i++)
+        {
+            Transform child = leaderboardPanel.transform.GetChild(i);
+            if (!child.gameObject.activeSelf)
+            {
+                Debug.LogWarning($"[LeaderboardPanel] Child {child.name} is inactive! Activating it.");
+                child.gameObject.SetActive(true);
+            }
+        }
+        
+        // Double-check panel is still active after activating children
+        if (!leaderboardPanel.activeSelf)
+        {
+            Debug.LogError("[LeaderboardPanel] Panel became inactive after activating children! Reactivating...");
+            leaderboardPanel.SetActive(true);
+        }
         
         // Check panel's RectTransform to ensure it's visible
         RectTransform rectTransform = leaderboardPanel.GetComponent<RectTransform>();
@@ -288,6 +409,16 @@ public class LeaderboardPanel : MonoBehaviour
         
         // Refresh the leaderboard content
         RefreshLeaderboard();
+        
+        // Force a frame update to ensure panel is rendered
+        Canvas.ForceUpdateCanvases();
+        
+        // Double-check visibility after canvas update
+        if (leaderboardPanel != null)
+        {
+            panelIsVisible = leaderboardPanel.activeSelf && leaderboardPanel.activeInHierarchy;
+            Debug.Log($"[LeaderboardPanel] After canvas update - Panel visible: {panelIsVisible}, activeSelf: {leaderboardPanel.activeSelf}, activeInHierarchy: {leaderboardPanel.activeInHierarchy}");
+        }
         
         // Only hide the button AFTER we've verified the panel is actually visible
         if (panelIsVisible)

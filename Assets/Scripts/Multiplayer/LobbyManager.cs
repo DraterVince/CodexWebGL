@@ -246,9 +246,8 @@ SetupButtons();
         {
             leaderboardButton.onClick.RemoveAllListeners();
             leaderboardButton.onClick.AddListener(() => {
-                leaderboardPanel.OpenLeaderboard();
-                // Hide the leaderboard button when clicked
-                leaderboardButton.gameObject.SetActive(false);
+                // Pass button reference so LeaderboardPanel can hide it after verifying panel is visible
+                leaderboardPanel.OpenLeaderboard(leaderboardButton);
             });
         }
     }
