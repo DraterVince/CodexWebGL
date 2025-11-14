@@ -99,6 +99,18 @@ if (timerComponent != null && outputComponent != null && playCardButtonComponent
             correctAnswerPanel.SetActive(false);
         }
   
+        // Pause timer immediately when tutorial level starts
+        if (timerComponent != null)
+        {
+            timerComponent.SendMessage("PauseTimer");
+            timerPausedForTutorial = true;
+            Debug.Log("[TutorialManager] ?? Timer PAUSED at tutorial level start");
+        }
+        else
+        {
+            Debug.LogWarning("[TutorialManager] Timer component not found! Timer may not pause correctly.");
+        }
+  
         // Setup click handlers
         SetupClicks();
     }
@@ -137,12 +149,13 @@ if (timerComponent != null && outputComponent != null && playCardButtonComponent
         
         hasTriggered = true;
         
-        // Pause timer for the ENTIRE tutorial duration
+        // CRITICAL: Ensure timer is paused and stays paused
+        // Even if ExpectedOutput button tries to start the timer, we'll keep it paused
         if (timerComponent != null)
         {
             timerComponent.SendMessage("PauseTimer");
             timerPausedForTutorial = true;
-      Debug.Log("[TutorialManager] ?? Timer PAUSED for entire tutorial duration");
+            Debug.Log("[TutorialManager] ?? Timer PAUSED on output click - will stay paused during tutorial");
         }
         
         // Show panel
@@ -228,11 +241,34 @@ if (timerComponent != null && outputComponent != null && playCardButtonComponent
     }
     
     /// <summary>
- /// Called every frame to check if player played a card
+ /// Called every frame to check if player played a card and ensure timer stays paused
     /// </summary>
     private void Update()
     {
-        if (!isTutorial || !isWaitingForCardPlay) return;
+        if (!isTutorial) return;
+        
+        // CRITICAL: Continuously ensure timer stays paused during tutorial
+        // This prevents any other code (like ExpectedOutput button clicks) from starting the timer
+        if (timerPausedForTutorial && timerComponent != null)
+        {
+            // Use reflection to check if timer is actually paused
+            var timerType = timerComponent.GetType();
+            var isTimerActiveField = timerType.GetField("isTimerActive", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            
+            if (isTimerActiveField != null)
+            {
+                bool isTimerActive = (bool)isTimerActiveField.GetValue(timerComponent);
+                if (isTimerActive)
+                {
+                    // Timer was started by something else - pause it immediately!
+                    timerComponent.SendMessage("PauseTimer");
+                    Debug.LogWarning("[TutorialManager] Timer was started but tutorial is active - pausing immediately!");
+                }
+            }
+        }
+        
+        // Check for card play only if we're waiting for it
+        if (!isWaitingForCardPlay) return;
    
         // Check if PlayCardButton has been played using reflection
       if (playCardButtonComponent == null) return;
@@ -254,15 +290,24 @@ if (timerComponent != null && outputComponent != null && playCardButtonComponent
     /// </summary>
     private void CheckCardAnswer()
     {
+      Debug.Log("[TutorialManager] CheckCardAnswer() called - checking played card...");
       isWaitingForCardPlay = false; // Stop checking
    
       // Get the PlayedCard
         GameObject playedCardHolder = GameObject.Find("PlayedCard");
-        if (playedCardHolder == null || playedCardHolder.transform.childCount == 0)
-  {
-        Debug.LogWarning("[TutorialManager] No card found in PlayedCard holder!");
+        if (playedCardHolder == null)
+        {
+            Debug.LogError("[TutorialManager] PlayedCard GameObject not found!");
             return;
         }
+        
+        if (playedCardHolder.transform.childCount == 0)
+        {
+            Debug.LogWarning("[TutorialManager] No card found in PlayedCard holder!");
+            return;
+        }
+        
+        Debug.Log($"[TutorialManager] Found {playedCardHolder.transform.childCount} card(s) in PlayedCard holder");
     
       // Get the card from PlayedCard holder
         GameObject playedCard = playedCardHolder.transform.GetChild(0).gameObject;
@@ -287,18 +332,41 @@ if (timerComponent != null && outputComponent != null && playCardButtonComponent
         string expectedString = expectedText.text;
         int expectedCardNumber = -1;
   
+        Debug.Log($"[TutorialManager] ExpectedOutput text: '{expectedString}'");
+        
         if (expectedString.Contains("Play Card "))
         {
             string numberStr = expectedString.Replace("Play Card ", "").Trim();
-      int.TryParse(numberStr, out expectedCardNumber);
+      if (int.TryParse(numberStr, out expectedCardNumber))
+            {
+                Debug.Log($"[TutorialManager] Parsed expected card number: {expectedCardNumber}");
+            }
+            else
+            {
+                Debug.LogWarning($"[TutorialManager] Failed to parse expected card number from: '{numberStr}'");
+            }
       }
+        else
+        {
+            Debug.LogWarning($"[TutorialManager] ExpectedOutput text does not contain 'Play Card '. Text: '{expectedString}'");
+        }
   
         // Get played card number from its name (e.g., "Card3(Clone)")
-        string playedCardName = playedCard.name.Replace("(Clone)", "").Replace("Card", "");
-        int playedCardNumber = -1;
-        int.TryParse(playedCardName, out playedCardNumber);
+        string playedCardName = playedCard.name;
+        Debug.Log($"[TutorialManager] Played card name: '{playedCardName}'");
         
-    Debug.Log($"[TutorialManager] Expected: {expectedCardNumber}, Played: {playedCardNumber}");
+        string cleanedName = playedCardName.Replace("(Clone)", "").Replace("Card", "");
+        int playedCardNumber = -1;
+        if (int.TryParse(cleanedName, out playedCardNumber))
+        {
+            Debug.Log($"[TutorialManager] Parsed played card number: {playedCardNumber}");
+        }
+        else
+        {
+            Debug.LogWarning($"[TutorialManager] Failed to parse played card number from: '{cleanedName}'");
+        }
+        
+    Debug.Log($"[TutorialManager] Comparison - Expected: {expectedCardNumber}, Played: {playedCardNumber}, Match: {playedCardNumber == expectedCardNumber}");
         
         // Check if correct
    bool isCorrect = (playedCardNumber == expectedCardNumber);
@@ -310,8 +378,12 @@ Debug.Log("[TutorialManager] ? Correct card played!");
   // Show correct panel
    if (correctAnswerPanel != null)
   {
-          correctAnswerPanel.SetActive(true);
+          ShowPanel(correctAnswerPanel, "Correct Answer");
             }
+  else
+        {
+            Debug.LogError("[TutorialManager] correctAnswerPanel is NULL! Assign it in the Inspector.");
+        }
   
       // ? CHANGED: Resume timer now that tutorial is complete
             ResumeTutorialTimer();
@@ -323,14 +395,86 @@ Debug.Log("[TutorialManager] ? Correct card played!");
          // Show wrong panel
           if (wrongAnswerPanel != null)
  {
-            wrongAnswerPanel.SetActive(true);
+            ShowPanel(wrongAnswerPanel, "Wrong Answer");
             }
+        else
+        {
+            Debug.LogError("[TutorialManager] wrongAnswerPanel is NULL! Assign it in the Inspector.");
+        }
         
    // ? Timer stays paused - player needs to try again
           Debug.Log("[TutorialManager] Timer remains paused - player should try again");
 
             // Allow player to try again
      isWaitingForCardPlay = true;
+        }
+    }
+    
+    /// <summary>
+    /// Show a panel and ensure it's visible (activates parents and canvas if needed)
+    /// </summary>
+    private void ShowPanel(GameObject panel, string panelName)
+    {
+        if (panel == null)
+        {
+            Debug.LogError($"[TutorialManager] Cannot show {panelName} panel - GameObject is NULL!");
+            return;
+        }
+        
+        Debug.Log($"[TutorialManager] Attempting to show {panelName} panel: {panel.name}");
+        
+        // Ensure parent objects are active
+        Transform parent = panel.transform.parent;
+        while (parent != null)
+        {
+            if (!parent.gameObject.activeSelf)
+            {
+                Debug.LogWarning($"[TutorialManager] Parent {parent.name} is inactive! Activating it.");
+                parent.gameObject.SetActive(true);
+            }
+            parent = parent.parent;
+        }
+        
+        // Ensure Canvas is active
+        Canvas canvas = panel.GetComponentInParent<Canvas>();
+        if (canvas != null)
+        {
+            if (!canvas.gameObject.activeSelf)
+            {
+                Debug.LogWarning($"[TutorialManager] Canvas is inactive! Activating it.");
+                canvas.gameObject.SetActive(true);
+            }
+            
+            // Bring canvas to front by setting high sorting order
+            if (canvas.overrideSorting == false || canvas.sortingOrder < 100)
+            {
+                canvas.overrideSorting = true;
+                canvas.sortingOrder = 100;
+                Debug.Log($"[TutorialManager] Canvas sorting order set to {canvas.sortingOrder}");
+            }
+        }
+        
+        // Bring panel to front in hierarchy
+        panel.transform.SetAsLastSibling();
+        
+        // Ensure CanvasGroup alpha is 1 (fully visible)
+        CanvasGroup canvasGroup = panel.GetComponent<CanvasGroup>();
+        if (canvasGroup != null)
+        {
+            canvasGroup.alpha = 1f;
+            canvasGroup.interactable = true;
+            canvasGroup.blocksRaycasts = true;
+            Debug.Log($"[TutorialManager] CanvasGroup alpha set to 1 for {panelName} panel");
+        }
+        
+        // Activate the panel
+        panel.SetActive(true);
+        Debug.Log($"[TutorialManager] {panelName} panel activated. activeSelf: {panel.activeSelf}, activeInHierarchy: {panel.activeInHierarchy}");
+        
+        // Verify visibility
+        if (!panel.activeInHierarchy)
+        {
+            Debug.LogError($"[TutorialManager] {panelName} panel is NOT active in hierarchy! Check parent objects.");
         }
     }
     
@@ -343,6 +487,11 @@ Debug.Log("[TutorialManager] ? Correct card played!");
         if (wrongAnswerPanel != null)
         {
          wrongAnswerPanel.SetActive(false);
+            Debug.Log("[TutorialManager] Wrong answer panel closed");
+        }
+        else
+        {
+            Debug.LogWarning("[TutorialManager] wrongAnswerPanel is NULL!");
         }
       
         // Timer stays paused - player gets to try again
