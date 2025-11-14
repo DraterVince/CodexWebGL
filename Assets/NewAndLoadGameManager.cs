@@ -15,7 +15,7 @@ public class NewAndLoadGameManager : MonoBehaviour
     
     // Level progress tracking
     private const int FirstLevelIndex = 5; // Tutorial level (index 5)
-    private const int LastLevelIndex = 15; // Part1Level10 (index 15)
+    private const int LastLevelIndex = 25; // Part2Level10 (index 25) - Updated to include Part 2 levels
     
     public int CurrentSlot { get; private set; }
     private string currentUserId = "";
@@ -657,12 +657,14 @@ SaveToSlot(CurrentSlot, data);
     /// <summary>
     /// Calculate progress percentage based on levels unlocked
     /// Returns a value from 0 to 100 representing completion percentage
-    /// Progress is calculated from first level (index 5) to last level (index 15)
+    /// Progress is calculated from first level (index 5 - Tutorial) to last level (index 25 - Part2Level10)
+    /// Includes: Tutorial (5), Part1Level1-10 (6-15), Part2Level1-10 (16-25) = 21 total levels
     /// Note: Having the first level unlocked still counts as 0% (no levels completed yet)
     /// </summary>
     public float CalculateProgressPercentage(int levelsUnlocked)
     {
-        // Total number of levels (from index 5 to 15, inclusive)
+        // Total number of levels (from index 5 to 25, inclusive)
+        // Tutorial (5) + Part1Level1-10 (6-15) + Part2Level1-10 (16-25) = 21 levels total
         int totalLevels = LastLevelIndex - FirstLevelIndex + 1;
         
         // Calculate how many levels have been completed

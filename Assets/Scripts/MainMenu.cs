@@ -36,13 +36,38 @@ public class MainMenu : MonoBehaviour
     /// </summary>
     private void OnLeaderboardClicked()
     {
+        Debug.Log("[MainMenu] Leaderboard button clicked");
+        
         if (leaderboardPanel != null)
         {
+            Debug.Log("[MainMenu] Calling leaderboardPanel.OpenLeaderboard()");
             leaderboardPanel.OpenLeaderboard();
+            
+            // Hide the leaderboard button when clicked
+            if (leaderboardButton != null)
+            {
+                Debug.Log("[MainMenu] Hiding leaderboard button");
+                leaderboardButton.gameObject.SetActive(false);
+            }
+            else
+            {
+                Debug.LogWarning("[MainMenu] leaderboardButton is null!");
+            }
         }
         else
         {
-            Debug.LogWarning("[MainMenu] LeaderboardPanel not assigned!");
+            Debug.LogError("[MainMenu] LeaderboardPanel script not assigned! Make sure to assign it in the Inspector.");
+        }
+    }
+    
+    /// <summary>
+    /// Show the leaderboard button (called by LeaderboardPanel when closed)
+    /// </summary>
+    public void ShowLeaderboardButton()
+    {
+        if (leaderboardButton != null)
+        {
+            leaderboardButton.gameObject.SetActive(true);
         }
     }
 

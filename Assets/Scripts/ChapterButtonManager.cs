@@ -60,7 +60,17 @@ public class ChapterButtonManager : MonoBehaviour
             if (chapterButtons[i] == null) continue;
             
             int requiredLevel = (i + 1) * 10; // Button 0 = level 10, Button 1 = level 20, etc.
-            bool isUnlocked = currentPlayerLevel >= requiredLevel;
+            
+            // Always unlock buttons 0 and 1 (first two buttons for CardsPanel1 and CardsPanel2)
+            bool isUnlocked;
+            if (i == 0 || i == 1)
+            {
+                isUnlocked = true; // Always unlocked
+            }
+            else
+            {
+                isUnlocked = currentPlayerLevel >= requiredLevel;
+            }
             
             UpdateButtonVisual(i, isUnlocked, requiredLevel);
         }
@@ -116,6 +126,12 @@ public class ChapterButtonManager : MonoBehaviour
     /// </summary>
     public bool IsChapterUnlocked(int chapterIndex)
     {
+        // Always unlock chapters 0 and 1 (first two buttons)
+        if (chapterIndex == 0 || chapterIndex == 1)
+        {
+            return true;
+        }
+        
         int requiredLevel = (chapterIndex + 1) * 10;
         return currentPlayerLevel >= requiredLevel;
     }

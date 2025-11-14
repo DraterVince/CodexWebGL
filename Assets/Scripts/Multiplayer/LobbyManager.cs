@@ -52,6 +52,9 @@ public class LobbyManager : MonoBehaviourPunCallbacks
     [Header("Leaderboard")]
     [SerializeField] private Button leaderboardButton;
     [SerializeField] private LeaderboardPanel leaderboardPanel;
+    
+    // Public property to access leaderboard button
+    public Button LeaderboardButton => leaderboardButton;
   
     [Header("Game Settings")]
     [SerializeField] private int minPlayers = 2;
@@ -242,7 +245,11 @@ SetupButtons();
         if (leaderboardButton != null && leaderboardPanel != null)
         {
             leaderboardButton.onClick.RemoveAllListeners();
-            leaderboardButton.onClick.AddListener(() => leaderboardPanel.OpenLeaderboard());
+            leaderboardButton.onClick.AddListener(() => {
+                leaderboardPanel.OpenLeaderboard();
+                // Hide the leaderboard button when clicked
+                leaderboardButton.gameObject.SetActive(false);
+            });
         }
     }
 
