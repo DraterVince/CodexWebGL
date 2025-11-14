@@ -53,4 +53,34 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/Part 1 Levels/Part1Level10.unity
     guid: 035dbc54d7abdbf4182358bef0bd0a75
+  - enabled: 1
+    path: Assets/Scenes/Part 2 Levels/Part2Level1.unity
+    guid: 4a8fb8fe24ef5f142bc6f007a5a00f3c
+  - enabled: 1
+    path: Assets/Scenes/Part 2 Levels/Part2Level2.unity
+    guid: 9ed5511c7e375a7418681ea7770aba0a
+  - enabled: 1
+    path: Assets/Scenes/Part 2 Levels/Part2Level3.unity
+    guid: 54109bea466a72e429270aa163ebc832
+  - enabled: 1
+    path: Assets/Scenes/Part 2 Levels/Part2Level4.unity
+    guid: 04ce9b2f671f17e48bf84b902071da0c
+  - enabled: 1
+    path: Assets/Scenes/Part 2 Levels/Part2Level5.unity
+    guid: 5397310d9af940746b1d159c975fa4ad
+  - enabled: 1
+    path: Assets/Scenes/Part 2 Levels/Part2Level6.unity
+    guid: f5b6f5771616eb64aba71451c42521fe
+  - enabled: 1
+    path: Assets/Scenes/Part 2 Levels/Part2Level7.unity
+    guid: b8114c3506b12d44b92384abd7b8e215
+  - enabled: 1
+    path: Assets/Scenes/Part 2 Levels/Part2Level8.unity
+    guid: 81d77752a42703e41aede4f7e7b7adba
+  - enabled: 1
+    path: Assets/Scenes/Part 2 Levels/Part2Level9.unity
+    guid: 07c75588b02675b4d8c8207eead7ee93
+  - enabled: 1
+    path: Assets/Scenes/Part 2 Levels/Part2Level10.unity
+    guid: 4ccc52d4813367f40ad9597e473b17d1
   m_configObjects: {}
