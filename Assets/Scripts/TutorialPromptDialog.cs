@@ -108,6 +108,9 @@ if (tutorialPromptPanel != null)
    PlayerPrefs.SetInt("HasSeenTutorial", 1);
         PlayerPrefs.Save();
 
+        // Ensure managers persist before loading scene
+        EnsureManagersPersist();
+
   // Load tutorial level (scene index 5)
         // The lore dialogue will play automatically when the scene loads
  Debug.Log("[TutorialPromptDialog] Loading tutorial level with lore intro...");
@@ -126,6 +129,9 @@ if (tutorialPromptPanel != null)
         // Mark that tutorial has been seen (even if skipped)
         PlayerPrefs.SetInt("HasSeenTutorial", 1);
         PlayerPrefs.Save();
+        
+        // Ensure managers persist before loading scene
+        EnsureManagersPersist();
         
       // Load level select
      Debug.Log("[TutorialPromptDialog] Loading level select...");
@@ -148,5 +154,98 @@ if (tutorialPromptPanel != null)
         PlayerPrefs.DeleteKey("HasSeenTutorial");
 PlayerPrefs.Save();
    Debug.Log("[TutorialPromptDialog] Tutorial flag reset");
+    }
+    
+    /// <summary>
+    /// Ensure critical managers persist before loading a new scene
+    /// </summary>
+    private void EnsureManagersPersist()
+    {
+        Debug.Log("[TutorialPromptDialog] Ensuring managers persist before scene load...");
+        
+        // Ensure NewAndLoadGameManager persists
+        if (NewAndLoadGameManager.Instance != null)
+        {
+            if (NewAndLoadGameManager.Instance.gameObject != null)
+            {
+                // Move to root if it's a child (children get destroyed with parent)
+                if (NewAndLoadGameManager.Instance.transform.parent != null)
+                {
+                    Debug.LogWarning("[TutorialPromptDialog] NewAndLoadGameManager is a child object! Moving to root to prevent destruction.");
+                    NewAndLoadGameManager.Instance.transform.SetParent(null);
+                }
+                DontDestroyOnLoad(NewAndLoadGameManager.Instance.gameObject);
+                Debug.Log("[TutorialPromptDialog] NewAndLoadGameManager set to persist");
+            }
+            else
+            {
+                Debug.LogError("[TutorialPromptDialog] NewAndLoadGameManager.Instance.gameObject is null!");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("[TutorialPromptDialog] NewAndLoadGameManager.Instance is null!");
+        }
+        
+        // Ensure PlayerDataManager persists
+        if (PlayerDataManager.Instance != null)
+        {
+            if (PlayerDataManager.Instance.gameObject != null)
+            {
+                // Move to root if it's a child (children get destroyed with parent)
+                if (PlayerDataManager.Instance.transform.parent != null)
+                {
+                    Debug.LogWarning("[TutorialPromptDialog] PlayerDataManager is a child object! Moving to root to prevent destruction.");
+                    PlayerDataManager.Instance.transform.SetParent(null);
+                }
+                DontDestroyOnLoad(PlayerDataManager.Instance.gameObject);
+                Debug.Log("[TutorialPromptDialog] PlayerDataManager set to persist");
+            }
+            else
+            {
+                Debug.LogError("[TutorialPromptDialog] PlayerDataManager.Instance.gameObject is null!");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("[TutorialPromptDialog] PlayerDataManager.Instance is null!");
+        }
+        
+        // Ensure LoadingScreenManager persists
+        if (LoadingScreenManager.Instance != null)
+        {
+            if (LoadingScreenManager.Instance.gameObject != null)
+            {
+                // Move to root if it's a child (children get destroyed with parent)
+                if (LoadingScreenManager.Instance.transform.parent != null)
+                {
+                    Debug.LogWarning("[TutorialPromptDialog] LoadingScreenManager is a child object! Moving to root to prevent destruction.");
+                    LoadingScreenManager.Instance.transform.SetParent(null);
+                }
+                DontDestroyOnLoad(LoadingScreenManager.Instance.gameObject);
+                Debug.Log("[TutorialPromptDialog] LoadingScreenManager set to persist");
+            }
+            else
+            {
+                Debug.LogError("[TutorialPromptDialog] LoadingScreenManager.Instance.gameObject is null!");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("[TutorialPromptDialog] LoadingScreenManager.Instance is null!");
+        }
+        
+        // Ensure other critical managers persist
+        if (SupabaseReadyManager.Instance != null && SupabaseReadyManager.Instance.gameObject != null)
+        {
+            DontDestroyOnLoad(SupabaseReadyManager.Instance.gameObject);
+            Debug.Log("[TutorialPromptDialog] SupabaseReadyManager set to persist");
+        }
+        
+        if (AuthManager.Instance != null && AuthManager.Instance.gameObject != null)
+        {
+            DontDestroyOnLoad(AuthManager.Instance.gameObject);
+            Debug.Log("[TutorialPromptDialog] AuthManager set to persist");
+        }
     }
 }

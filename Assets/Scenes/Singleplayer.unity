@@ -497,6 +497,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   logoutButton: {fileID: 0}
   userEmailText: {fileID: 0}
+  leaderboardButton: {fileID: 0}
+  leaderboardPanel: {fileID: 0}
 --- !u!1 &412046608
 GameObject:
   m_ObjectHideFlags: 0
@@ -2152,7 +2154,6 @@ GameObject:
   - component: {fileID: 1672690034}
   - component: {fileID: 1672690036}
   - component: {fileID: 1672690035}
-  - component: {fileID: 1672690037}
   m_Layer: 5
   m_Name: TutorialPromptPanel
   m_TagString: Untagged
@@ -2220,22 +2221,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1672690033}
   m_CullTransparentMesh: 1
---- !u!114 &1672690037
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1672690033}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1f669da37f4310e4184a6a1afb1f00b2, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  tutorialPromptPanel: {fileID: 1672690033}
-  yesButton: {fileID: 1191165986}
-  noButton: {fileID: 1054074031}
-  messageText: {fileID: 1509746668}
 --- !u!1 &1830092917
 GameObject:
   m_ObjectHideFlags: 0
@@ -2541,6 +2526,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2083718014}
   - component: {fileID: 2083718015}
+  - component: {fileID: 2083718016}
   m_Layer: 0
   m_Name: SaveLoadUI
   m_TagString: Untagged
@@ -2584,6 +2570,22 @@ MonoBehaviour:
   confirmationText: {fileID: 707345192}
   confirmYesButton: {fileID: 2086550482}
   confirmNoButton: {fileID: 322448024}
+--- !u!114 &2083718016
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2083718012}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1f669da37f4310e4184a6a1afb1f00b2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  tutorialPromptPanel: {fileID: 1672690033}
+  yesButton: {fileID: 1191165986}
+  noButton: {fileID: 1054074031}
+  messageText: {fileID: 1509746668}
 --- !u!1 &2086550480
 GameObject:
   m_ObjectHideFlags: 0

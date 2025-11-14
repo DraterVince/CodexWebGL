@@ -75,10 +75,21 @@ public class NewAndLoadGameManager : MonoBehaviour
         {
             Instance = this;
             DontDestroyOnLoad(gameObject);
+            Debug.Log("[NewAndLoadGameManager] Instance created and set to DontDestroyOnLoad");
         }
-        else
+        else if (Instance != this)
         {
+            Debug.LogWarning("[NewAndLoadGameManager] Duplicate instance detected, destroying duplicate");
             Destroy(gameObject);
+        }
+    }
+    
+    private void OnDestroy()
+    {
+        // Prevent accidental destruction - only destroy if this is not the instance
+        if (Instance == this)
+        {
+            Debug.LogWarning("[NewAndLoadGameManager] Instance is being destroyed! This should not happen with DontDestroyOnLoad.");
         }
     }
     

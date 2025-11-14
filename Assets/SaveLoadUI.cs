@@ -290,13 +290,48 @@ else
      {
             Debug.Log("[SaveLoadUI] First save created - showing tutorial prompt");
             
-            if (TutorialPromptDialog.Instance != null)
+            // CRITICAL: Ensure managers persist before showing tutorial prompt
+            EnsureManagersPersist();
+            
+            // Wait a frame to ensure all Awake methods have been called
+            yield return null;
+            
+            // Try to find TutorialPromptDialog if Instance is null or destroyed
+            bool instanceValid = TutorialPromptDialog.Instance != null && TutorialPromptDialog.Instance.gameObject != null;
+            
+            if (!instanceValid)
+            {
+                Debug.Log("[SaveLoadUI] TutorialPromptDialog.Instance is null or destroyed, searching in scene...");
+                TutorialPromptDialog dialog = FindObjectOfType<TutorialPromptDialog>();
+                if (dialog != null)
+                {
+                    Debug.Log("[SaveLoadUI] Found TutorialPromptDialog in scene, waiting for initialization...");
+                    // Wait one more frame to ensure Awake has been called
+                    yield return null;
+                    // Re-check if Instance is now valid
+                    instanceValid = TutorialPromptDialog.Instance != null && TutorialPromptDialog.Instance.gameObject != null;
+                }
+                else
+                {
+                    Debug.LogError("[SaveLoadUI] TutorialPromptDialog component not found in scene! Make sure it's attached to a GameObject in the SaveLoadMenu scene.");
+                }
+            }
+            
+            if (instanceValid && TutorialPromptDialog.Instance != null)
          {
+          Debug.Log("[SaveLoadUI] Showing tutorial prompt dialog");
+          
+          // Verify that the panel reference is assigned
+          if (TutorialPromptDialog.Instance.tutorialPromptPanel == null)
+          {
+              Debug.LogError("[SaveLoadUI] TutorialPromptDialog.tutorialPromptPanel is not assigned in the Inspector! The tutorial prompt will not be visible.");
+          }
+          
           TutorialPromptDialog.Instance.ShowTutorialPrompt();
             }
  else
      {
- Debug.LogWarning("[SaveLoadUI] TutorialPromptDialog not found! Skipping to level select...");
+ Debug.LogWarning("[SaveLoadUI] TutorialPromptDialog not available! Skipping to level select...");
        // Fallback: Go directly to level select
             NewAndLoadGameManager.Instance.LoadGame(slot);
           }
@@ -326,5 +361,77 @@ else
     public void RefreshSlots()
     {
         GenerateSlots();
+    }
+    
+    /// <summary>
+    /// Ensure critical managers persist before showing tutorial prompt
+    /// </summary>
+    private void EnsureManagersPersist()
+    {
+        Debug.Log("[SaveLoadUI] Ensuring managers persist before showing tutorial prompt...");
+        
+        // Ensure NewAndLoadGameManager persists
+        if (NewAndLoadGameManager.Instance != null)
+        {
+            if (NewAndLoadGameManager.Instance.gameObject != null)
+            {
+                // Move to root if it's a child (children get destroyed with parent)
+                if (NewAndLoadGameManager.Instance.transform.parent != null)
+                {
+                    Debug.LogWarning("[SaveLoadUI] NewAndLoadGameManager is a child object! Moving to root to prevent destruction.");
+                    NewAndLoadGameManager.Instance.transform.SetParent(null);
+                }
+                DontDestroyOnLoad(NewAndLoadGameManager.Instance.gameObject);
+                Debug.Log("[SaveLoadUI] NewAndLoadGameManager set to persist");
+            }
+            else
+            {
+                Debug.LogError("[SaveLoadUI] NewAndLoadGameManager.Instance.gameObject is null!");
+            }
+        }
+        else
+        {
+            Debug.LogError("[SaveLoadUI] NewAndLoadGameManager.Instance is null! This will cause issues!");
+        }
+        
+        // Ensure LoadingScreenManager persists
+        if (LoadingScreenManager.Instance != null)
+        {
+            if (LoadingScreenManager.Instance.gameObject != null)
+            {
+                // Move to root if it's a child (children get destroyed with parent)
+                if (LoadingScreenManager.Instance.transform.parent != null)
+                {
+                    Debug.LogWarning("[SaveLoadUI] LoadingScreenManager is a child object! Moving to root to prevent destruction.");
+                    LoadingScreenManager.Instance.transform.SetParent(null);
+                }
+                DontDestroyOnLoad(LoadingScreenManager.Instance.gameObject);
+                Debug.Log("[SaveLoadUI] LoadingScreenManager set to persist");
+            }
+            else
+            {
+                Debug.LogError("[SaveLoadUI] LoadingScreenManager.Instance.gameObject is null!");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("[SaveLoadUI] LoadingScreenManager.Instance is null!");
+        }
+        
+        // Ensure PlayerDataManager persists
+        if (PlayerDataManager.Instance != null)
+        {
+            if (PlayerDataManager.Instance.gameObject != null)
+            {
+                // Move to root if it's a child (children get destroyed with parent)
+                if (PlayerDataManager.Instance.transform.parent != null)
+                {
+                    Debug.LogWarning("[SaveLoadUI] PlayerDataManager is a child object! Moving to root to prevent destruction.");
+                    PlayerDataManager.Instance.transform.SetParent(null);
+                }
+                DontDestroyOnLoad(PlayerDataManager.Instance.gameObject);
+                Debug.Log("[SaveLoadUI] PlayerDataManager set to persist");
+            }
+        }
     }
 }

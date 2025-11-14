@@ -46,9 +46,11 @@ public class LoadingScreenManager : MonoBehaviour
             {
                 Instance = this;
                 DontDestroyOnLoad(gameObject);
+                Debug.Log("[LoadingScreenManager] Instance created and set to DontDestroyOnLoad");
             }
-            else
+            else if (Instance != this)
             {
+                Debug.LogWarning("[LoadingScreenManager] Duplicate instance detected, destroying duplicate");
                 Destroy(gameObject);
                 return;
             }
@@ -99,6 +101,15 @@ public class LoadingScreenManager : MonoBehaviour
             // Get animation components
             spinnerAnimator = loadingSpinner.GetComponent<Animator>();
             spinnerAnimation = loadingSpinner.GetComponent<Animation>();
+        }
+    }
+    
+    private void OnDestroy()
+    {
+        // Prevent accidental destruction - only destroy if this is not the instance
+        if (useSingleton && Instance == this)
+        {
+            Debug.LogWarning("[LoadingScreenManager] Instance is being destroyed! This should not happen with DontDestroyOnLoad.");
         }
     }
     
